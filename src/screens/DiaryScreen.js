@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -12,33 +12,37 @@ import {
   TouchableWithoutFeedback,
   Keyboard
 } from 'react-native';
-
-// Componente de soporte (lo mantenemos aquí por ahora)
-const ResumenCalorias = ({ total }) => (
-  <View style={styles.card}>
-    <Text style={styles.textoCard}>Consumo de hoy</Text>
-    <Text style={styles.numeroCalorias}>{total} kcal</Text>
-  </View>
-);
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DiaryScreen({ navigation }) {
   const [nombreAlimento, setNombreAlimento] = useState('');
   const [caloriasInput, setCaloriasInput] = useState('');
   const [listaAlimentos, setListaAlimentos] = useState([]);
   const [totalCalorias, setTotalCalorias] = useState(0);
+  const [metaCalorias, setMetaCalorias] = useState(2000); // Meta por defecto
+
+  // 1. Cargar la meta guardada y la lista (si existiera) al abrir la pantalla
+  useEffect(() => {
+    const inicializarDatos = async () => {
+      try {
+        const metaGuardada = await AsyncStorage.getItem('@calorias_meta');
+        if (metaGuardada !== null) {
+          setMetaCalorias(parseInt(metaGuardada));
+        }
+      } catch (e) { console.log("Error cargando meta:", e); }
+    };
+    inicializarDatos();
+  }, []);
 
   const guardarAlimento = () => {
     if (nombreAlimento === '' || caloriasInput === '') return;
-
     const nuevoAlimento = {
       id: Math.random().toString(),
       nombre: nombreAlimento,
       kcal: parseInt(caloriasInput)
     };
-
     setListaAlimentos([...listaAlimentos, nuevoAlimento]);
     setTotalCalorias(totalCalorias + nuevoAlimento.kcal);
-    
     setNombreAlimento('');
     setCaloriasInput('');
     Keyboard.dismiss();
@@ -50,19 +54,34 @@ export default function DiaryScreen({ navigation }) {
     setTotalCalorias(totalCalorias - kcal);
   };
 
+  // Lógica para la barra de progreso (porcentaje)
+  const porcentaje = Math.min((totalCalorias / metaCalorias) * 100, 100);
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.container}>
         <StatusBar style="light" />
         
-        {/* Botón para volver atrás (opcional) */}
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.btnVolver}>
-           <Text style={styles.textoVolver}>← Volver</Text>
+           <Text style={styles.textoVolver}>← Volver a Calculadora</Text>
         </TouchableOpacity>
 
         <Text style={styles.titulo}>Mi Diario</Text>
 
-        <ResumenCalorias total={totalCalorias} />
+        {/* Tarjeta de Progreso */}
+        <View style={styles.cardProgreso}>
+          <Text style={styles.textoMeta}>Meta: {metaCalorias} kcal</Text>
+          <Text style={styles.textoConsumido}>{totalCalorias} consumidas</Text>
+          
+          {/* Barra de Progreso */}
+          <View style={styles.barraFondo}>
+            <View style={[styles.barraProgreso, { width: `${porcentaje}%` }]} />
+          </View>
+          
+          <Text style={styles.textoRestante}>
+            Quedan: {metaCalorias - totalCalorias > 0 ? metaCalorias - totalCalorias : 0} kcal
+          </Text>
+        </View>
 
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -70,7 +89,7 @@ export default function DiaryScreen({ navigation }) {
         >
           <TextInput 
             style={styles.input}
-            placeholder="¿Qué comiste?"
+            placeholder="Alimento (Ej. Arepa)"
             placeholderTextColor="#A0A0A0"
             value={nombreAlimento}
             onChangeText={setNombreAlimento}
@@ -84,7 +103,7 @@ export default function DiaryScreen({ navigation }) {
             onChangeText={setCaloriasInput}
           />
           <TouchableOpacity style={styles.botonVerde} onPress={guardarAlimento}>
-            <Text style={styles.textoBoton}>+ AGREGAR</Text>
+            <Text style={styles.textoBoton}>+ AGREGAR ALIMENTO</Text>
           </TouchableOpacity>
         </KeyboardAvoidingView>
 
@@ -106,7 +125,7 @@ export default function DiaryScreen({ navigation }) {
             </View>
           )}
           ListEmptyComponent={
-            <Text style={styles.listaVacia}>No hay alimentos aún.</Text>
+            <Text style={styles.listaVacia}>No has registrado nada hoy.</Text>
           }
         />
       </View>
@@ -118,10 +137,35 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#003366', paddingTop: 50, paddingHorizontal: 20 },
   btnVolver: { marginBottom: 10 },
   textoVolver: { color: '#28A745', fontWeight: 'bold' },
-  titulo: { color: '#F2F2F2', fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
-  card: { backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: 20, borderRadius: 15, alignItems: 'center', marginBottom: 20 },
-  textoCard: { color: '#D1D1D1', fontSize: 14 },
-  numeroCalorias: { color: '#FFFFFF', fontSize: 36, fontWeight: 'bold' },
+  titulo: { color: '#F2F2F2', fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 15 },
+  
+  cardProgreso: { 
+    backgroundColor: 'rgba(255, 255, 255, 0.1)', 
+    padding: 20, 
+    borderRadius: 20, 
+    alignItems: 'center', 
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)'
+  },
+  textoMeta: { color: '#A0A0A0', fontSize: 14 },
+  textoConsumido: { color: '#FFF', fontSize: 22, fontWeight: 'bold', marginVertical: 5 },
+  textoRestante: { color: '#28A745', fontSize: 14, marginTop: 10, fontWeight: '600' },
+  
+  barraFondo: { 
+    width: '100%', 
+    height: 12, 
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
+    borderRadius: 6, 
+    marginTop: 10,
+    overflow: 'hidden' 
+  },
+  barraProgreso: { 
+    height: '100%', 
+    backgroundColor: '#28A745', 
+    borderRadius: 6 
+  },
+
   formulario: { marginBottom: 20 },
   input: { backgroundColor: '#F8F9FA', borderRadius: 10, padding: 12, marginBottom: 10, color: '#333' },
   botonVerde: { backgroundColor: '#28A745', padding: 15, borderRadius: 10, alignItems: 'center' },
