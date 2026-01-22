@@ -110,9 +110,9 @@ export default function CalculatorScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flexGrow: 1, backgroundColor: '#003366', padding: 25, paddingTop: 50 },
   title: { color: '#FFF', fontSize: 26, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  input: { backgroundColor: '#FFF', borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 16 },
+  input: { backgroundColor: '#FFF', borderRadius: 10, padding: 15, marginBottom: 20, fontSize: 16 },
   label: { color: '#D1D1D1', marginTop: 10, marginBottom: 10, fontWeight: '600' },
-  row: { flexDirection: 'row', justifyContent: 'space-between' },
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
   miniBtn: { backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 8, width: '31%', alignItems: 'center', justifyContent: 'center' },
   active: { backgroundColor: '#28A745' },
   activeDeficit: { backgroundColor: '#FFC107' },
