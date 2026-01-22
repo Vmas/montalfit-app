@@ -19,11 +19,11 @@ export default function DiaryScreen({ navigation }) {
   const [caloriasInput, setCaloriasInput] = useState('');
   const [listaAlimentos, setListaAlimentos] = useState([]);
   const [totalCalorias, setTotalCalorias] = useState(0);
-  const [metaCalorias, setMetaCalorias] = useState(2000); // Meta por defecto
+  const [metaCalorias, setMetaCalorias] = useState(2000);
 
-  // 1. Cargar la meta guardada y la lista (si existiera) al abrir la pantalla
+  // Cargar la meta guardada al entrar
   useEffect(() => {
-    const inicializarDatos = async () => {
+    const cargarMeta = async () => {
       try {
         const metaGuardada = await AsyncStorage.getItem('@calorias_meta');
         if (metaGuardada !== null) {
@@ -31,7 +31,7 @@ export default function DiaryScreen({ navigation }) {
         }
       } catch (e) { console.log("Error cargando meta:", e); }
     };
-    inicializarDatos();
+    cargarMeta();
   }, []);
 
   const guardarAlimento = () => {
@@ -54,7 +54,7 @@ export default function DiaryScreen({ navigation }) {
     setTotalCalorias(totalCalorias - kcal);
   };
 
-  // Lógica para la barra de progreso (porcentaje)
+  // Cálculo del porcentaje para el círculo
   const porcentaje = Math.min((totalCalorias / metaCalorias) * 100, 100);
 
   return (
@@ -68,18 +68,34 @@ export default function DiaryScreen({ navigation }) {
 
         <Text style={styles.titulo}>Mi Diario</Text>
 
-        {/* Tarjeta de Progreso */}
+        {/* Tarjeta de Progreso Circular */}
         <View style={styles.cardProgreso}>
-          <Text style={styles.textoMeta}>Meta: {metaCalorias} kcal</Text>
-          <Text style={styles.textoConsumido}>{totalCalorias} consumidas</Text>
-          
-          {/* Barra de Progreso */}
-          <View style={styles.barraFondo}>
-            <View style={[styles.barraProgreso, { width: `${porcentaje}%` }]} />
+          <View style={styles.contenedorCirculo}>
+            {/* Círculo de Fondo (El "vaso" que se llena) */}
+            <View style={styles.circuloFondo}>
+              <View style={[
+                styles.progresoCirculo, 
+                { 
+                  height: `${porcentaje}%`, 
+                  backgroundColor: porcentaje >= 100 ? '#FF4444' : '#28A745' 
+                }
+              ]} />
+            </View>
+            
+            {/* El centro que tapa el color para hacer el efecto de anillo */}
+            <View style={styles.centroAzul}>
+              <Text style={styles.numeroCentro}>{totalCalorias}</Text>
+              <Text style={styles.metaCentro}>de {metaCalorias} kcal</Text>
+            </View>
           </View>
           
-          <Text style={styles.textoRestante}>
-            Quedan: {metaCalorias - totalCalorias > 0 ? metaCalorias - totalCalorias : 0} kcal
+          <Text style={[
+            styles.textoRestante, 
+            { color: totalCalorias >= metaCalorias ? '#FF4444' : '#28A745' }
+          ]}>
+            {totalCalorias >= metaCalorias 
+              ? '¡Límite alcanzado!' 
+              : `Te faltan ${metaCalorias - totalCalorias} kcal`}
           </Text>
         </View>
 
@@ -89,7 +105,7 @@ export default function DiaryScreen({ navigation }) {
         >
           <TextInput 
             style={styles.input}
-            placeholder="Alimento (Ej. Arepa)"
+            placeholder="Alimento (Ej. Pollo)"
             placeholderTextColor="#A0A0A0"
             value={nombreAlimento}
             onChangeText={setNombreAlimento}
@@ -103,7 +119,7 @@ export default function DiaryScreen({ navigation }) {
             onChangeText={setCaloriasInput}
           />
           <TouchableOpacity style={styles.botonVerde} onPress={guardarAlimento}>
-            <Text style={styles.textoBoton}>+ AGREGAR ALIMENTO</Text>
+            <Text style={styles.textoBoton}>+ AÑADIR AL DIARIO</Text>
           </TouchableOpacity>
         </KeyboardAvoidingView>
 
@@ -125,7 +141,7 @@ export default function DiaryScreen({ navigation }) {
             </View>
           )}
           ListEmptyComponent={
-            <Text style={styles.listaVacia}>No has registrado nada hoy.</Text>
+            <Text style={styles.listaVacia}>No has registrado alimentos hoy.</Text>
           }
         />
       </View>
@@ -141,30 +157,43 @@ const styles = StyleSheet.create({
   
   cardProgreso: { 
     backgroundColor: 'rgba(255, 255, 255, 0.1)', 
-    padding: 20, 
-    borderRadius: 20, 
+    padding: 25, 
+    borderRadius: 25, 
     alignItems: 'center', 
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)'
+    borderColor: 'rgba(255, 255, 255, 0.05)'
   },
-  textoMeta: { color: '#A0A0A0', fontSize: 14 },
-  textoConsumido: { color: '#FFF', fontSize: 22, fontWeight: 'bold', marginVertical: 5 },
-  textoRestante: { color: '#28A745', fontSize: 14, marginTop: 10, fontWeight: '600' },
-  
-  barraFondo: { 
-    width: '100%', 
-    height: 12, 
-    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
-    borderRadius: 6, 
-    marginTop: 10,
-    overflow: 'hidden' 
+  contenedorCirculo: {
+    width: 160,
+    height: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  barraProgreso: { 
-    height: '100%', 
-    backgroundColor: '#28A745', 
-    borderRadius: 6 
+  circuloFondo: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden', 
+    justifyContent: 'flex-end', 
   },
+  progresoCirculo: {
+    width: '100%',
+    // La altura se maneja dinámicamente en el componente
+  },
+  centroAzul: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#003366', 
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  numeroCentro: { color: '#FFF', fontSize: 32, fontWeight: 'bold' },
+  metaCentro: { color: '#A0A0A0', fontSize: 14 },
+  textoRestante: { fontSize: 14, marginTop: 15, fontWeight: 'bold' },
 
   formulario: { marginBottom: 20 },
   input: { backgroundColor: '#F8F9FA', borderRadius: 10, padding: 12, marginBottom: 10, color: '#333' },
