@@ -1,27 +1,15 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-
-// Importaremos las pantallas que crearemos a continuación
-import HomeScreen from './src/screens/HomeScreen';
-import CalculatorScreen from './src/screens/CalculatorScreen';
-import DiaryScreen from './src/screens/DiaryScreen';
-
-const Stack = createNativeStackNavigator();
+import { SafeAreaView, StatusBar } from 'react-native';
+import RegistroScreen from './src/screens/RegistroScreen'; // 1. Verifica que esta ruta sea correcta
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator 
-        initialRouteName="Home"
-        screenOptions={{
-          headerShown: false, // Ocultamos la barra de arriba para un diseño más moderno
-        }}
-      >
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Calculator" component={CalculatorScreen} />
-        <Stack.Screen name="Diary" component={DiaryScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#003366' }}>
+      {/* Esto hace que la barra de estado (donde sale la hora/batería) sea blanca */}
+      <StatusBar barStyle="light-content" />
+      
+      {/* 2. Aquí llamamos a la nueva pantalla que creamos de cero */}
+      <RegistroScreen />
+    </SafeAreaView>
   );
 }
