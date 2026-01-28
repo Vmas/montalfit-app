@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, 
   StyleSheet, ActivityIndicator, Alert, ScrollView, Modal 
@@ -6,8 +6,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
-// 1. IMPORTA TU LISTA LOCAL (Asegúrate de que la ruta sea correcta)
+// 1. IMPORTA TU LISTA LOCAL
 import alimentosLocales from '../data/alimentos.json'; 
 
 const USDA_API_KEY = 'UyLYCL8Bq6X0QmrQzuz5vxF9tHrnj2QlaxsaAvRd'; 
@@ -27,27 +28,74 @@ export default function DashboardScreen() {
   const [modalManual, setModalManual] = useState(false);
   const [manualFood, setManualFood] = useState({ nombre: '', kcal: '', p: '', c: '', g: '' });
 
-  useEffect(() => {
-    cargarDatosIniciales();
-  }, []);
+  const [aguaConsumida, setAguaConsumida] = useState(0);
+  const [metaAgua, setMetaAgua] = useState(2000);
+
+  // REFREZCO DINÁMICO: Al entrar a la pestaña, actualiza Calorías, Agua y Peso
+  useFocusEffect(
+    useCallback(() => {
+      cargarDatosIniciales();
+      cargarDatosAgua();
+    }, [])
+  );
 
   const cargarDatosIniciales = async () => {
     try {
       const perfil = await AsyncStorage.getItem('@perfil_usuario');
       if (perfil) setMetaCalorias(JSON.parse(perfil).caloriasMeta);
+      
       const hoy = new Date().toISOString().split('T')[0];
       const guardado = await AsyncStorage.getItem(`@diario_${hoy}`);
       if (guardado) setComidasDelDia(JSON.parse(guardado));
-    } catch (e) { console.log("Error al cargar"); }
+    } catch (e) { console.log("Error al cargar iniciales"); }
   };
 
-  // --- NUEVA LÓGICA DE BÚSQUEDA HÍBRIDA ---
+  // --- LÓGICA DE AGUA OPTIMIZADA ---
+  const cargarDatosAgua = async () => {
+    const hoy = new Date().toLocaleDateString();
+    const datos = await AsyncStorage.getItem(`@agua_${hoy}`);
+    setAguaConsumida(datos ? parseInt(datos) : 0);
+    
+    const perfilDatos = await AsyncStorage.getItem('@perfil_usuario');
+    if (perfilDatos) {
+      const p = JSON.parse(perfilDatos);
+      const calculo = Math.round(p.peso * 35); // Meta dinámica por peso
+      setMetaAgua(calculo);
+    }
+  };
+
+  const sumarAgua = async (ml) => {
+    const hoy = new Date().toLocaleDateString();
+    const nuevaCantidad = aguaConsumida + ml;
+    
+    if (nuevaCantidad > 6000) { // Alerta de seguridad 6L
+      Alert.alert("¡Atención!", "Estás registrando mucha agua. Mantén presionado para reiniciar si es un error.");
+    }
+
+    setAguaConsumida(nuevaCantidad);
+    await AsyncStorage.setItem(`@agua_${hoy}`, nuevaCantidad.toString());
+  };
+
+  const reiniciarAgua = () => {
+    Alert.alert(
+      "Reiniciar Hidratación",
+      "¿Quieres poner a cero el contador de hoy?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Sí, reiniciar", onPress: async () => {
+            const hoy = new Date().toLocaleDateString();
+            setAguaConsumida(0);
+            await AsyncStorage.setItem(`@agua_${hoy}`, "0");
+        }}
+      ]
+    );
+  };
+
+  // --- BUSCADOR Y NUTRICIÓN ---
   const buscarAlimento = async () => {
     if (busqueda.length < 3) return;
     setCargando(true);
-    
     try {
-      // PASO A: Buscar en JSON Local
       const locales = alimentosLocales.filter(item => 
         item.nombre.toLowerCase().includes(busqueda.toLowerCase())
       );
@@ -55,10 +103,8 @@ export default function DashboardScreen() {
       if (locales.length > 0) {
         setResultados(locales.map(l => ({ ...l, fuente: 'Local' })));
       } else {
-        // PASO B: Si no hay local, buscar en USDA (Sin traducción para más velocidad)
         const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${busqueda}&pageSize=15`);
         const data = await res.json();
-        
         const procesados = (data.foods || []).map(f => ({
           id: f.fdcId || Date.now() + Math.random(),
           nombre: f.description.toLowerCase(),
@@ -71,24 +117,36 @@ export default function DashboardScreen() {
         }));
         setResultados(procesados);
       }
-    } catch (e) { 
-      Alert.alert("Error", "No hay conexión para búsqueda externa"); 
-    } finally { 
-      setCargando(false); 
-    }
+    } catch (e) { Alert.alert("Error", "No hay conexión"); } finally { setCargando(false); }
   };
 
   const abrirModalCantidad = (item) => {
     setAlimentoSeleccionado(item);
+    const esReceta = item.subnombre && item.subnombre.includes('Recetas');
     const esHuevo = item.nombre.toLowerCase().includes('huevo') || item.nombre.toLowerCase().includes('egg');
-    setEsPorUnidad(esHuevo);
-    setCantidad(esHuevo ? '1' : '100');
+    
+    if (esReceta) {
+      setEsPorUnidad(true);
+      setCantidad('1');
+    } else {
+      setEsPorUnidad(esHuevo);
+      setCantidad(esHuevo ? '1' : '100');
+    }
     setModalCantidad(true);
   };
 
   const confirmarGuardado = async () => {
-    let factor = esPorUnidad ? (parseFloat(cantidad) * 50) / 100 : parseFloat(cantidad) / 100;
-    let sufijo = esPorUnidad ? "u" : "g";
+    const esReceta = alimentoSeleccionado.subnombre && alimentoSeleccionado.subnombre.includes('Recetas');
+    let factor;
+    let sufijo;
+
+    if (esReceta) {
+      factor = parseFloat(cantidad);
+      sufijo = parseFloat(cantidad) === 1 ? " porción" : " porciones";
+    } else {
+      factor = esPorUnidad ? (parseFloat(cantidad) * 50) / 100 : parseFloat(cantidad) / 100;
+      sufijo = esPorUnidad ? "u" : "g";
+    }
 
     const itemFinal = {
       ...alimentoSeleccionado,
@@ -104,7 +162,6 @@ export default function DashboardScreen() {
     setComidasDelDia(nuevaLista);
     const hoy = new Date().toISOString().split('T')[0];
     await AsyncStorage.setItem(`@diario_${hoy}`, JSON.stringify(nuevaLista));
-    
     setModalCantidad(false);
     setResultados([]);
     setBusqueda('');
@@ -136,7 +193,6 @@ export default function DashboardScreen() {
     setManualFood({ nombre: '', kcal: '', p: '', c: '', g: '' });
   };
 
-  // CÁLCULOS DE TOTALES
   const consumido = comidasDelDia.reduce((acc, i) => acc + (Number(i.calorias) || 0), 0);
   const tP = comidasDelDia.reduce((acc, i) => acc + (Number(i.p) || 0), 0).toFixed(1);
   const tC = comidasDelDia.reduce((acc, i) => acc + (Number(i.c) || 0), 0).toFixed(1);
@@ -145,7 +201,7 @@ export default function DashboardScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView keyboardShouldPersistTaps="handled">
-        {/* HEADER CALORÍAS */}
+        {/* CALORÍAS */}
         <View style={styles.header}>
           <Text style={styles.restantes}>{Math.max(0, Math.round(metaCalorias - consumido))}</Text>
           <Text style={styles.sub}>Calorías Restantes</Text>
@@ -154,12 +210,24 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* MACROS TOTALES */}
+        {/* MACROS */}
         <View style={styles.macroRow}>
           <View style={styles.mCard}><Text style={styles.mV}>{tP}g</Text><Text style={styles.mL}>Prot</Text></View>
           <View style={styles.mCard}><Text style={styles.mV}>{tC}g</Text><Text style={styles.mL}>Carbs</Text></View>
           <View style={styles.mCard}><Text style={styles.mV}>{tG}g</Text><Text style={styles.mL}>Grasas</Text></View>
         </View>
+
+        {/* AGUA DINÁMICA - Toque largo para reiniciar */}
+        <TouchableOpacity style={styles.aguaCard} onLongPress={reiniciarAgua} activeOpacity={0.8}>
+          <View>
+            <Text style={styles.aguaTitulo}>Hidratación </Text>
+            <Text style={styles.aguaSubTitulo}>reiniciar: Manten presionado </Text>
+            <Text style={styles.aguaMeta}>{aguaConsumida}ml / {metaAgua}ml</Text>
+          </View>
+          <TouchableOpacity style={styles.btnAgua} onPress={() => sumarAgua(250)}>
+            <Text style={styles.btnAguaTxt}>+250ml 💧</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
 
         {/* BUSCADOR */}
         <View style={styles.searchRow}>
@@ -173,7 +241,6 @@ export default function DashboardScreen() {
           <Text style={styles.manualText}>{modalManual ? "✕ Cerrar" : "+ Añadir Manualmente"}</Text>
         </TouchableOpacity>
 
-        {/* FORMULARIO MANUAL */}
         {modalManual && (
           <View style={styles.manualForm}>
             <TextInput style={styles.inputM} placeholder="Nombre del alimento" placeholderTextColor="#999" onChangeText={t => setManualFood({...manualFood, nombre: t})} />
@@ -191,7 +258,6 @@ export default function DashboardScreen() {
 
         <Text style={styles.tituloSec}>{resultados.length > 0 ? "Resultados encontrados:" : "Consumo de hoy:"}</Text>
         
-        {/* LISTADO DE RESULTADOS O COMIDAS */}
         {(resultados.length > 0 ? resultados : comidasDelDia).map((item, index) => (
           <View key={item.id || index} style={styles.itemContainer}>
             <TouchableOpacity 
@@ -234,15 +300,24 @@ export default function DashboardScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCant}>
             <Text style={styles.modalTitle} numberOfLines={2}>{alimentoSeleccionado?.nombre}</Text>
-            <View style={styles.unitSelector}>
-              <TouchableOpacity onPress={() => setEsPorUnidad(false)} style={[styles.unitBtn, !esPorUnidad && styles.unitBtnActive]}>
-                <Text style={styles.unitBtnText}>Gramos</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setEsPorUnidad(true)} style={[styles.unitBtn, esPorUnidad && styles.unitBtnActive]}>
-                <Text style={styles.unitBtnText}>Unidades</Text>
-              </TouchableOpacity>
-            </View>
+            
+            {!(alimentoSeleccionado?.subnombre && alimentoSeleccionado?.subnombre.includes('Recetas')) ? (
+              <View style={styles.unitSelector}>
+                <TouchableOpacity onPress={() => setEsPorUnidad(false)} style={[styles.unitBtn, !esPorUnidad && styles.unitBtnActive]}>
+                  <Text style={styles.unitBtnText}>Gramos</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setEsPorUnidad(true)} style={[styles.unitBtn, esPorUnidad && styles.unitBtnActive]}>
+                  <Text style={styles.unitBtnText}>Unidades</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={{color: '#28A745', textAlign: 'center', marginBottom: 15, fontWeight: 'bold'}}>
+                Cantidad de Porciones:
+              </Text>
+            )}
+
             <TextInput style={styles.inputCant} keyboardType="numeric" value={cantidad} onChangeText={setCantidad} autoFocus />
+            
             <View style={styles.row}>
               <TouchableOpacity style={[styles.btnG, {backgroundColor: '#444', flex: 1, marginRight: 10}]} onPress={() => setModalCantidad(false)}>
                 <Text style={styles.btnT}>VOLVER</Text>
@@ -259,40 +334,46 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#003366', padding: 20 },
+  container: { flex: 1, backgroundColor: '#003366', paddingHorizontal: 20 },
   header: { alignItems: 'center', marginVertical: 10, backgroundColor: 'rgba(255,255,255,0.05)', padding: 20, borderRadius: 25 },
   restantes: { color: '#FFF', fontSize: 55, fontWeight: '900' },
   sub: { color: '#28A745', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   barBg: { height: 6, width: '100%', backgroundColor: '#112233', borderRadius: 3, marginTop: 15 },
   barFill: { height: 6, backgroundColor: '#28A745', borderRadius: 3 },
-  macroRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  mCard: { backgroundColor: 'rgba(255,255,255,0.08)', padding: 12, borderRadius: 15, width: '30%', alignItems: 'center' },
+  macroRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  mCard: { backgroundColor: 'rgba(255,255,255,0.08)', padding: 12, borderRadius: 15, width: '31%', alignItems: 'center' },
   mV: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   mL: { color: '#28A745', fontSize: 10, fontWeight: 'bold' },
+  aguaCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0, 122, 255, 0.1)', padding: 18, borderRadius: 20, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(0, 122, 255, 0.3)' },
+  aguaTitulo: { color: '#82B1FF', fontWeight: 'bold', fontSize: 15, textTransform: 'uppercase' },
+  aguaSubTitulo: { color: '#c5ddf6', fontSize: 12, marginBottom: 5 },
+  aguaMeta: { color: '#FFF', fontSize: 18, fontWeight: '900' },
+  btnAgua: { backgroundColor: '#007AFF', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12 },
+  btnAguaTxt: { color: '#FFF', fontWeight: 'bold' },
   searchRow: { flexDirection: 'row', marginBottom: 10 },
-  input: { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 15, color: '#000', fontSize: 16 },
+  input: { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 15, color: '#000' },
   btnS: { backgroundColor: '#28A745', width: 55, marginLeft: 8, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  manualText: { color: '#28A745', textAlign: 'center', marginVertical: 10, fontWeight: 'bold', fontSize: 14 },
+  manualText: { color: '#28A745', textAlign: 'center', marginVertical: 10, fontWeight: 'bold' },
   manualForm: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 20, marginBottom: 15 },
   inputM: { backgroundColor: '#FFF', borderRadius: 10, padding: 12, marginBottom: 8, color: '#000' },
   row: { flexDirection: 'row' },
-  btnG: { backgroundColor: '#28A745', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 5 },
-  btnT: { color: '#FFF', fontWeight: 'bold', fontSize: 14 },
-  tituloSec: { color: '#AAA', marginTop: 10, marginBottom: 12, fontWeight: 'bold', fontSize: 11, textTransform: 'uppercase' },
+  btnG: { backgroundColor: '#28A745', padding: 16, borderRadius: 12, alignItems: 'center' },
+  btnT: { color: '#FFF', fontWeight: 'bold' },
+  tituloSec: { color: '#AAA', marginBottom: 12, fontSize: 11, fontWeight: 'bold' },
   itemContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  item: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', padding: 15, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  itemName: { color: '#FFF', textTransform: 'capitalize', fontWeight: '700', fontSize: 14, marginBottom: 2, maxWidth: '70%' },
-  itemMacros: { color: '#28A745', fontSize: 11, fontWeight: '600' },
+  item: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', padding: 15, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 18 },
+  itemName: { color: '#FFF', fontWeight: '700', fontSize: 14, maxWidth: '70%' },
+  itemMacros: { color: '#28A745', fontSize: 11 },
   itemK: { color: '#FFF', fontWeight: '900', fontSize: 18 },
-  btnBorrar: { padding: 12, marginLeft: 8, backgroundColor: 'rgba(255,68,68,0.1)', borderRadius: 15, justifyContent: 'center' },
+  btnBorrar: { padding: 12, marginLeft: 8, backgroundColor: 'rgba(255,68,68,0.1)', borderRadius: 15 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,10,20,0.9)', justifyContent: 'center', padding: 25 },
   modalCant: { backgroundColor: '#001a33', padding: 25, borderRadius: 30, borderWidth: 1, borderColor: '#28A745' },
-  modalTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
+  modalTitle: { color: '#FFF', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
   unitSelector: { flexDirection: 'row', marginBottom: 20, backgroundColor: '#112233', borderRadius: 15, padding: 5 },
-  unitBtn: { flex: 1, padding: 12, alignItems: 'center', borderRadius: 12 },
+  unitBtn: { flex: 1, padding: 10, alignItems: 'center', borderRadius: 10 },
   unitBtnActive: { backgroundColor: '#28A745' },
   unitBtnText: { color: '#FFF', fontWeight: 'bold' },
-  inputCant: { backgroundColor: '#FFF', borderRadius: 20, padding: 15, fontSize: 35, textAlign: 'center', fontWeight: '900', color: '#000', marginBottom: 25 },
+  inputCant: { backgroundColor: '#FFF', borderRadius: 20, padding: 15, fontSize: 30, textAlign: 'center', fontWeight: '900', color: '#000', marginBottom: 20 },
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
   badgeText: { color: '#FFF', fontSize: 8, fontWeight: 'bold' }
 });
