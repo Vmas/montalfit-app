@@ -15,6 +15,7 @@ const USDA_API_KEY = 'UyLYCL8Bq6X0QmrQzuz5vxF9tHrnj2QlaxsaAvRd';
 
 export default function DashboardScreen() {
   const [metaCalorias, setMetaCalorias] = useState(2000);
+  const [metasMacros, setMetasMacros] = useState({ p: 0, c: 0, g: 0 });
   const [comidasDelDia, setComidasDelDia] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);
@@ -39,33 +40,78 @@ export default function DashboardScreen() {
     }, [])
   );
 
-  const cargarDatosIniciales = async () => {
+  
+
+  const calcularMacros = (objetivo, kcalMeta, peso) => {
+  const pesoNum = parseFloat(peso) || 70;
+  let p, g, c;
+
+  // Sincronizado con los nuevos nombres del Registro/Perfil
+  if (objetivo === 'Perder Grasa') {
+    p = pesoNum * 2.2; // Proteína alta para preservar músculo en déficit
+    g = pesoNum * 0.8; 
+  } else if (objetivo === 'Ganar Músculo') {
+    p = pesoNum * 1.8; 
+    g = pesoNum * 1.0; 
+  } else {
+    // Mantener
+    p = pesoNum * 1.6;
+    g = pesoNum * 0.9;
+  }
+
+  const kcalRestantes = kcalMeta - (p * 4 + g * 9);
+  c = kcalRestantes / 4;
+
+  return {
+    p: Math.round(p),
+    c: Math.round(c),
+    g: Math.round(g)
+  };
+};
+
+const cargarDatosIniciales = async () => {
     try {
-      const perfil = await AsyncStorage.getItem('@perfil_usuario');
-      if (perfil) setMetaCalorias(JSON.parse(perfil).caloriasMeta);
-      
-      const hoy = new Date().toISOString().split('T')[0];
-      const guardado = await AsyncStorage.getItem(`@diario_${hoy}`);
-      if (guardado) setComidasDelDia(JSON.parse(guardado));
-    } catch (e) { console.log("Error al cargar iniciales"); }
+      const perfilDoc = await AsyncStorage.getItem('@perfil_usuario');
+      const hoy = new Date().toISOString().split('T')[0]; // Formato unificado
+
+      if (perfilDoc) {
+        const p = JSON.parse(perfilDoc);
+        setMetaCalorias(p.caloriasMeta);
+        
+        // Calculamos macros con el peso más actual guardado en el perfil
+        const macros = calcularMacros(p.objetivo, p.caloriasMeta, p.peso); 
+        setMetasMacros(macros);
+      }
+
+      // Cargar comidas del día actual
+      const datosComida = await AsyncStorage.getItem(`@diario_${hoy}`);
+      if (datosComida) {
+        setComidasDelDia(JSON.parse(datosComida));
+      } else {
+        setComidasDelDia([]); // Limpiar si es un nuevo día
+      }
+    } catch (e) { 
+      console.log("Error al cargar iniciales:", e); 
+    }
   };
 
   // --- LÓGICA DE AGUA OPTIMIZADA ---
   const cargarDatosAgua = async () => {
-    const hoy = new Date().toLocaleDateString();
+    const hoy = new Date().toISOString().split('T')[0]; // Formato unificado
     const datos = await AsyncStorage.getItem(`@agua_${hoy}`);
     setAguaConsumida(datos ? parseInt(datos) : 0);
     
     const perfilDatos = await AsyncStorage.getItem('@perfil_usuario');
     if (perfilDatos) {
       const p = JSON.parse(perfilDatos);
-      const calculo = Math.round(p.peso * 35); // Meta dinámica por peso
+      // Meta de agua: 35ml por cada kg de peso corporal
+      const calculo = Math.round(parseFloat(p.peso) * 35); 
       setMetaAgua(calculo);
     }
   };
 
   const sumarAgua = async (ml) => {
-    const hoy = new Date().toLocaleDateString();
+    const hoy = new Date().toISOString().split('T')[0]; // Formato unificado
     const nuevaCantidad = aguaConsumida + ml;
     
     if (nuevaCantidad > 6000) { // Alerta de seguridad 6L
@@ -83,7 +129,7 @@ export default function DashboardScreen() {
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Sí, reiniciar", onPress: async () => {
-            const hoy = new Date().toLocaleDateString();
+            const hoy = new Date().toISOString().split('T')[0]; // Formato unificado
             setAguaConsumida(0);
             await AsyncStorage.setItem(`@agua_${hoy}`, "0");
         }}
@@ -194,13 +240,18 @@ export default function DashboardScreen() {
   };
 
   const consumido = comidasDelDia.reduce((acc, i) => acc + (Number(i.calorias) || 0), 0);
-  const tP = comidasDelDia.reduce((acc, i) => acc + (Number(i.p) || 0), 0).toFixed(1);
-  const tC = comidasDelDia.reduce((acc, i) => acc + (Number(i.c) || 0), 0).toFixed(1);
-  const tG = comidasDelDia.reduce((acc, i) => acc + (Number(i.g) || 0), 0).toFixed(1);
+  const tP = comidasDelDia.reduce((acc, i) => acc + (Number(i.p) || 0), 0).toFixed(0);
+  const tC = comidasDelDia.reduce((acc, i) => acc + (Number(i.c) || 0), 0).toFixed(0);
+  const tG = comidasDelDia.reduce((acc, i) => acc + (Number(i.g) || 0), 0).toFixed(0);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView keyboardShouldPersistTaps="handled">
+
+        <View style={styles.brandContainer}>
+            <Ionicons name="flash" size={16} color="#28A745" />
+            <Text style={styles.brandTitle}>MONTALFIT</Text>
+        </View>
         {/* CALORÍAS */}
         <View style={styles.header}>
           <Text style={styles.restantes}>{Math.max(0, Math.round(metaCalorias - consumido))}</Text>
@@ -212,16 +263,58 @@ export default function DashboardScreen() {
 
         {/* MACROS */}
         <View style={styles.macroRow}>
-          <View style={styles.mCard}><Text style={styles.mV}>{tP}g</Text><Text style={styles.mL}>Prot</Text></View>
-          <View style={styles.mCard}><Text style={styles.mV}>{tC}g</Text><Text style={styles.mL}>Carbs</Text></View>
-          <View style={styles.mCard}><Text style={styles.mV}>{tG}g</Text><Text style={styles.mL}>Grasas</Text></View>
-        </View>
+  {/* Círculo Proteína */}
+  <View style={styles.circleContainer}>
+    <View style={[styles.macroCircle, { borderColor: '#28A745' }]}>
+      {/* CAPA DE LLENADO */}
+      <View style={[styles.fillIndicator, { 
+        height: `${Math.min(100, (Number(tP) / metasMacros.p) * 100)}%`, 
+        backgroundColor: 'rgba(40, 167, 69, 0.3)' 
+      }]} />
+      
+      <Text style={styles.mV}>{tP}g</Text>
+      <View style={styles.divider} />
+      <Text style={styles.mTotal}>{metasMacros.p}g</Text>
+    </View>
+    <Text style={styles.mL}>PROT</Text>
+  </View>
+
+  {/* Círculo Carbos */}
+  <View style={styles.circleContainer}>
+    <View style={[styles.macroCircle, { borderColor: '#FFC107' }]}>
+      <View style={[styles.fillIndicator, { 
+        height: `${Math.min(100, (Number(tC) / metasMacros.c) * 100)}%`, 
+        backgroundColor: 'rgba(255, 193, 7, 0.3)' 
+      }]} />
+      
+      <Text style={styles.mV}>{tC}g</Text>
+      <View style={styles.divider} />
+      <Text style={styles.mTotal}>{metasMacros.c}g</Text>
+    </View>
+    <Text style={styles.mL}>CARBS</Text>
+  </View>
+
+  {/* Círculo Grasas */}
+  <View style={styles.circleContainer}>
+    <View style={[styles.macroCircle, { borderColor: '#17A2B8' }]}>
+      <View style={[styles.fillIndicator, { 
+        height: `${Math.min(100, (Number(tG) / metasMacros.g) * 100)}%`, 
+        backgroundColor: 'rgba(23, 162, 184, 0.3)' 
+      }]} />
+      
+      <Text style={styles.mV}>{tG}g</Text>
+      <View style={styles.divider} />
+      <Text style={styles.mTotal}>{metasMacros.g}g</Text>
+    </View>
+    <Text style={styles.mL}>GRASAS</Text>
+  </View>
+</View>
 
         {/* AGUA DINÁMICA - Toque largo para reiniciar */}
         <TouchableOpacity style={styles.aguaCard} onLongPress={reiniciarAgua} activeOpacity={0.8}>
           <View>
             <Text style={styles.aguaTitulo}>Hidratación </Text>
-            <Text style={styles.aguaSubTitulo}>reiniciar: Manten presionado </Text>
+            <Text style={styles.aguaSubTitulo}>Reiniciar: Manten presionado </Text>
             <Text style={styles.aguaMeta}>{aguaConsumida}ml / {metaAgua}ml</Text>
           </View>
           <TouchableOpacity style={styles.btnAgua} onPress={() => sumarAgua(250)}>
@@ -337,10 +430,49 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#003366', paddingHorizontal: 20 },
   header: { alignItems: 'center', marginVertical: 10, backgroundColor: 'rgba(255,255,255,0.05)', padding: 20, borderRadius: 25 },
   restantes: { color: '#FFF', fontSize: 55, fontWeight: '900' },
+  brandContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 18 },
+  brandTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', marginLeft: 8 },
   sub: { color: '#28A745', fontSize: 14, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
   barBg: { height: 6, width: '100%', backgroundColor: '#112233', borderRadius: 3, marginTop: 15 },
   barFill: { height: 6, backgroundColor: '#28A745', borderRadius: 3 },
   macroRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+  circleContainer: {
+    alignItems: 'center',
+    width: '30%',
+  },
+  
+  divider: {
+    height: 1,
+    width: '60%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginVertical: 2,
+  },
+  mTotal: {
+    color: '#AAA',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  macroCircle: {
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    borderWidth: 3,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    overflow: 'hidden', // IMPORTANTE: Corta el relleno para que sea circular
+    position: 'relative',
+  },
+  fillIndicator: {
+    opacity: 0.6,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    width: '100%',
+  },
+  // Actualiza mV y mL que ya tenías
   mCard: { backgroundColor: 'rgba(255,255,255,0.08)', padding: 12, borderRadius: 15, width: '31%', alignItems: 'center' },
   mV: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
   mL: { color: '#28A745', fontSize: 10, fontWeight: 'bold' },

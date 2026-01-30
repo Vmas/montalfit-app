@@ -7,8 +7,22 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useIsFocused } from '@react-navigation/native';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { Platform } from 'react-native';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function ProgresoScreen() {
+  const chartRef = useRef();
   const isFocused = useIsFocused();
   const [nuevoPeso, setNuevoPeso] = useState('');
   const [historialPeso, setHistorialPeso] = useState([0]);
@@ -20,6 +34,59 @@ export default function ProgresoScreen() {
   const [enReto, setEnReto] = useState(false);
   const [diaDelReto, setDiaDelReto] = useState(1);
   const animacionBarra = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+  configurarNotificaciones();
+  //enviarNotificacionPrueba();
+}, []);
+
+const configurarNotificaciones = async () => {
+  // 1. Configuración de Canal para Android (Debe ir primero)
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Recordatorios',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#28A745',
+    });
+  }
+
+  // 2. Pedir permisos
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') return;
+  }
+
+  // 3. Programar el recordatorio diario (7:30 AM)
+  await Notifications.cancelAllScheduledNotificationsAsync();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "🏆 Reto MontalFit",
+      body: "Es hora de registrar tu peso para Aromas de los valles altos. ¡Vamos!",
+    },
+    trigger: { hour: 7, minute: 30, repeats: true },
+  });
+};
+
+
+//prueba de notificaciones
+const enviarNotificacionPrueba = async () => {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "✅ ¡Sistema Activo!",
+      body: "Las notificaciones de MontalFit están configuradas correctamente.",
+      sound: true,
+    },
+    trigger: null, // "null" significa que se envía de inmediato
+  });
+};
+
+
 
   useEffect(() => {
     if (isFocused) {
@@ -48,19 +115,31 @@ export default function ProgresoScreen() {
           // Mantenemos los últimos 7 registros para que el gráfico no se amontone
           setHistorialPeso(data.map(item => item.peso).slice(-7));
           setFechas(data.map(item => item.fecha).slice(-7));
-        }
+        }else {
+  // Reset por si borran todo
+  setHistorialPeso([0]);
+  setFechas(['-']);
+}
       }
 
-      // 2. Cargar Estado del Reto
-      const fechaInicio = await AsyncStorage.getItem('@inicio_reto_montalfit');
-      if (fechaInicio) {
-        setEnReto(true);
-        const inicio = new Date(fechaInicio);
-        const hoy = new Date();
-        const diffTime = Math.abs(hoy - inicio);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        setDiaDelReto(diffDays > 90 ? 90 : (diffDays === 0 ? 1 : diffDays));
-      }
+      // 2. Cargar Estado del Reto (Lógica Mejorada)
+const fechaInicioStr = await AsyncStorage.getItem('@inicio_reto_montalfit');
+if (fechaInicioStr) {
+  setEnReto(true);
+  
+  // Normalizamos las fechas a "solo fecha" (sin horas/minutos)
+  const inicio = new Date(fechaInicioStr);
+  inicio.setHours(0, 0, 0, 0);
+  
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  // Calculamos la diferencia en milisegundos y convertimos a días
+  const diffTime = hoy.getTime() - inicio.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 porque el día que inicia es el Día 1
+
+  setDiaDelReto(diffDays > 90 ? 90 : diffDays);
+}
 
       // 3. Perfil y Consumo
       const perfil = await AsyncStorage.getItem('@perfil_usuario');
@@ -83,40 +162,52 @@ export default function ProgresoScreen() {
   };
 
   const generarPDFMontalFit = async () => {
-    const hoyStr = new Date().toLocaleDateString();
-    const datosGrafica = historialPeso.map((p, i) => `['${fechas[i]}', ${p}]`).join(',');
+  try {
+    // 1. Capturar la gráfica como imagen Base64
+    const uri = await captureRef(chartRef, {
+      format: "jpg",
+      quality: 0.8,
+      result: "base64",
+    });
 
+    const imagenBase64 = `data:image/jpg;base64,${uri}`;
+    const hoyStr = new Date().toLocaleDateString();
+
+    // 2. HTML Simplificado (Sin scripts externos, carga la imagen directo)
     const htmlContent = `
       <html>
-        <head>
-          <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-          <script type="text/javascript">
-            google.charts.load('current', {'packages':['corechart']});
-            google.charts.setOnLoadCallback(drawChart);
-            function drawChart() {
-              var data = google.visualization.arrayToDataTable([['Fecha', 'Peso'], ${datosGrafica}]);
-              var options = { title: 'Evolución MontalFit', curveType: 'function', colors: ['#28A745'] };
-              var chart = new google.visualization.LineChart(document.getElementById('chart'));
-              chart.draw(data, options);
-            }
-          </script>
-        </head>
-        <body style="font-family: sans-serif; padding: 20px;">
-          <h1 style="color: #003366; text-align: center;">MONTALFIT</h1>
-          <p style="text-align: center; color: #666;">Reporte de Progreso Personal</p>
-          <div style="background: #f4f4f4; padding: 15px; border-radius: 10px; margin: 20px 0;">
-            <p><b>Día:</b> ${diaDelReto}/90 | <b>Fecha:</b> ${hoyStr}</p>
-            <p><b>Peso Actual:</b> ${historialPeso[historialPeso.length-1]} kg</p>
+        <body style="font-family: sans-serif; padding: 40px; color: #333;">
+          <div style="text-align: center;">
+            <h1 style="color: #003366; margin-bottom: 5px;">MONTALFIT</h1>
+            <p style="color: #28A745; font-weight: bold;">Reporte de Progreso Personal</p>
           </div>
-          <div id="chart" style="width: 100%; height: 300px;"></div>
+
+          <div style="background: #f4f4f4; padding: 20px; border-radius: 15px; margin: 30px 0;">
+            <p><b>Usuario:</b> Aromas de los valles altos</p>
+            <p><b>Día del Reto:</b> ${diaDelReto}/90</p>
+            <p><b>Fecha de Reporte:</b> ${hoyStr}</p>
+            <p><b>Peso Actual:</b> ${historialPeso[historialPeso.length - 1]} kg</p>
+          </div>
+
+          <h3 style="color: #003366;">Evolución de Peso</h3>
+          <img src="${imagenBase64}" style="width: 100%; border-radius: 10px; border: 1px solid #ddd;" />
+
+          <div style="margin-top: 50px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px;">
+            Este reporte fue generado automáticamente por la App MontalFit.<br/>
+            &copy; 2026 MontalFit.
+          </div>
         </body>
       </html>
     `;
-    try {
-      const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      await Sharing.shareAsync(uri);
-    } catch (e) { Alert.alert("Error", "No se pudo generar el reporte."); }
-  };
+
+    const { uri: pdfUri } = await Print.printToFileAsync({ html: htmlContent });
+    await Sharing.shareAsync(pdfUri);
+
+  } catch (e) {
+    console.log(e);
+    Alert.alert("Error", "Asegúrate de que la gráfica sea visible en pantalla antes de exportar.");
+  }
+};
 
   const gestionarReto = async () => {
     if (!enReto) {
@@ -134,31 +225,156 @@ export default function ProgresoScreen() {
         ]
       );
     } else {
-      Alert.alert("¿Abandonar Reto?", "Si abandonas ahora, perderás tu progreso actual en el Reto MontalFit. ¿Estás seguro?", [
-        { text: "Seguir", style: "cancel" },
-        { text: "Sí, abandonar", onPress: async () => {
-            await AsyncStorage.removeItem('@inicio_reto_montalfit');
-            setEnReto(false);
-            animacionBarra.setValue(0);
-        }}
-      ]);
+      // Dentro de gestionarReto, en el alert de abandono:
+Alert.alert(
+  "¿Reiniciar el Reto?", 
+  "Se borrará tu fecha de inicio y el contador de días volverá a 1. Tu historial de peso en la gráfica NO se borrará. ¿Confirmas?", 
+  [
+    { text: "Seguir en el reto", style: "cancel" },
+    { text: "Sí, reiniciar días", onPress: async () => {
+        await AsyncStorage.removeItem('@inicio_reto_montalfit');
+        setEnReto(false);
+        animacionBarra.setValue(0);
+        setDiaDelReto(1); // Reset local del estado
+    }}
+  ]
+);
     }
   };
 
   const registrarPeso = async () => {
     if (!nuevoPeso) return;
     const pesoNum = parseFloat(nuevoPeso);
-    const hoyLabel = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-    const nuevoRegistro = { fecha: hoyLabel, peso: pesoNum };
+
+    // 1. VALIDACIÓN DE LÍMITES DE SEGURIDAD
+    if (isNaN(pesoNum) || pesoNum < 30 || pesoNum > 350) {
+      Alert.alert(
+        "Peso no válido", 
+        "Por favor ingresa un peso realista (entre 30kg y 350kg) para que MontalFit pueda calcular tus metas correctamente."
+      );
+      return;
+    }
+
+    try {
+      // Obtenemos el perfil actual para comparar y recalcular
+      const perfilDoc = await AsyncStorage.getItem('@perfil_usuario');
+      const perfilActual = perfilDoc ? JSON.parse(perfilDoc) : null;
+
+      const realizarGuardado = async (nuevaMetaKcal) => {
+        // Actualizar Historial para la gráfica
+        const hoyLabel = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+        const nuevoRegistro = { fecha: hoyLabel, peso: pesoNum };
+        
+        const actualHistorial = await AsyncStorage.getItem('@historial_peso');
+        const lista = actualHistorial ? JSON.parse(actualHistorial) : [];
+        lista.push(nuevoRegistro);
+        await AsyncStorage.setItem('@historial_peso', JSON.stringify(lista));
+
+        // Actualizar Perfil (Peso y Calorías) para sincronizar con Dashboard
+        if (perfilActual) {
+          const perfilActualizado = {
+            ...perfilActual,
+            peso: pesoNum,
+            caloriasMeta: nuevaMetaKcal
+          };
+          await AsyncStorage.setItem('@perfil_usuario', JSON.stringify(perfilActualizado));
+        }
+
+        setNuevoPeso('');
+        cargarTodo();
+        Alert.alert("Éxito", "Peso y metas actualizados correctamente.");
+      };
+
+      // 2. LÓGICA DE RECALCULAR REQUERIMIENTOS
+      if (perfilActual && perfilActual.peso !== pesoNum) {
+        Alert.alert(
+          "Ajustar Metas",
+          `Has cambiado tu peso a ${pesoNum}kg. ¿Deseas recalcular tus requerimientos nutricionales automáticamente?`,
+          [
+            { 
+              text: "No, solo anotar peso", 
+              onPress: () => realizarGuardado(perfilActual.caloriasMeta) 
+            },
+            { 
+  text: "Sí, ajustar metas", 
+  onPress: () => {
+    // 1. Extraer datos necesarios del perfil actual
+    const { altura, nacimiento, sexo, objetivo, actividad } = perfilActual;
     
-    const actual = await AsyncStorage.getItem('@historial_peso');
-    const lista = actual ? JSON.parse(actual) : [];
-    lista.push(nuevoRegistro);
-    await AsyncStorage.setItem('@historial_peso', JSON.stringify(lista));
-    setNuevoPeso('');
-    cargarTodo();
-    Alert.alert("Éxito", "Peso guardado correctamente.");
+    // 2. Calcular edad (reutilizando lógica o calculando aquí)
+    const hoy = new Date();
+    const cumple = new Date(nacimiento);
+    let edad = hoy.getFullYear() - cumple.getFullYear();
+    if (hoy.getMonth() < cumple.getMonth() || (hoy.getMonth() === cumple.getMonth() && hoy.getDate() < cumple.getDate())) {
+      edad--;
+    }
+
+    // 3. Fórmula Mifflin-St. Jeor con el NUEVO peso corporal
+    let tmb = (10 * pesoNum) + (6.25 * parseFloat(altura)) - (5 * edad);
+    tmb = sexo === 'hombre' ? tmb + 5 : tmb - 161;
+
+    // 4. Aplicar factor de actividad y meta (Asegúrate que los nombres coincidan)
+    let mantenimiento = tmb * actividad;
+    let nuevaMeta = Math.round(
+      objetivo === 'Perder Grasa' ? mantenimiento - 500 : 
+      objetivo === 'Ganar Músculo' ? mantenimiento + 400 : 
+      mantenimiento
+    );
+
+    realizarGuardado(nuevaMeta);
+  }
+}
+          ]
+        );
+      } else {
+        // Si es el primer registro o el peso es igual
+        realizarGuardado(perfilActual ? perfilActual.caloriasMeta : 2000);
+      }
+
+    } catch (e) {
+      console.log("Error al registrar peso:", e);
+      Alert.alert("Error", "No se pudo sincronizar el peso.");
+    }
   };
+
+  const borrarUltimoPeso = async () => {
+  Alert.alert(
+    "Eliminar último registro",
+    "¿Estás seguro de que quieres borrar el último peso anotado?",
+    [
+      { text: "Cancelar", style: "cancel" },
+      { 
+        text: "Sí, borrar", 
+        style: "destructive", 
+        onPress: async () => {
+          try {
+            const guardadoPeso = await AsyncStorage.getItem('@historial_peso');
+            if (guardadoPeso) {
+              let lista = JSON.parse(guardadoPeso);
+              if (lista.length > 0) {
+                lista.pop(); // Elimina el último elemento
+                await AsyncStorage.setItem('@historial_peso', JSON.stringify(lista));
+                
+                // Si aún quedan pesos, actualizamos el perfil con el que quedó al final
+                const perfilDoc = await AsyncStorage.getItem('@perfil_usuario');
+                if (perfilDoc && lista.length > 0) {
+                  const perfil = JSON.parse(perfilDoc);
+                  perfil.peso = lista[lista.length - 1].peso;
+                  await AsyncStorage.setItem('@perfil_usuario', JSON.stringify(perfil));
+                }
+                
+                cargarTodo(); // Recargamos la gráfica y estados
+                Alert.alert("Eliminado", "El último registro ha sido borrado.");
+              }
+            }
+          } catch (e) {
+            console.log("Error al borrar:", e);
+          }
+        } 
+      }
+    ]
+  );
+};
 
   return (
     <SafeAreaView style={styles.container}>
@@ -178,6 +394,14 @@ export default function ProgresoScreen() {
                   width: animacionBarra.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) 
                 }]} />
               </View>
+
+              {/* AÑADE ESTO: Texto de porcentaje debajo de la barra */}
+  <View style={{flexDirection: 'row', justifyContent: 'space-between', marginTop: 5}}>
+    <Text style={{color: '#AAA', fontSize: 10}}>{diaDelReto} de 90 días</Text>
+    <Text style={{color: '#28A745', fontSize: 10, fontWeight: 'bold'}}>
+      {((diaDelReto / 90) * 100).toFixed(0)}%
+    </Text>
+  </View>
 
               {diaDelReto >= 30 ? (
                 <TouchableOpacity style={styles.btnDescargar} onPress={generarPDFMontalFit}>
@@ -205,14 +429,21 @@ export default function ProgresoScreen() {
         
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Progreso de tu Peso</Text>
+          <ViewShot ref={chartRef} options={{ format: "jpg", quality: 0.9 }}>
           <LineChart  
-            data={{ labels: fechas, datasets: [{ data: historialPeso }] }}
+            data={{ 
+  labels: fechas.length > 0 ? fechas : ["-"], // Si no hay fechas, pone un guion
+  datasets: [{ 
+    data: historialPeso.length > 0 ? historialPeso : [0] // Si no hay pesos, pone 0 para no crashear
+  }] 
+}}
             width={Dimensions.get("window").width - 70}
             height={180}
             chartConfig={chartConfig}
             bezier
             style={styles.chart}
           />
+          </ViewShot>
         </View>
 
         <View style={styles.inputCard}>
@@ -237,11 +468,42 @@ export default function ProgresoScreen() {
 </View>
 
         <View style={styles.inputCard}>
-          <Text style={styles.label}>Actualizar peso corporal (kg)</Text>
-          <View style={styles.row}>
-            <TextInput style={styles.input} keyboardType="numeric" value={nuevoPeso} onChangeText={setNuevoPeso} placeholder="Ej: 75.5" />
-            <TouchableOpacity style={styles.btn} onPress={registrarPeso}><Text style={styles.btnText}>Anotar</Text></TouchableOpacity>
-          </View>
+  <Text style={styles.label}>Actualizar peso corporal (kg)</Text>
+  
+  {/* Bloque horizontal: Input + Botón Anotar */}
+  <View style={styles.row}>
+    <TextInput 
+      style={styles.input} 
+      keyboardType="numeric" 
+      value={nuevoPeso} 
+      onChangeText={setNuevoPeso} 
+      placeholder="Ej: 75.5" 
+    />
+    <TouchableOpacity style={styles.btn} onPress={registrarPeso}>
+      <Text style={styles.btnText}>Anotar</Text>
+    </TouchableOpacity>
+  </View>
+
+  {/* Bloque vertical (FUERA DEL ROW): Botón Borrar */}
+  {fechas.length > 0 && fechas[0] !== '-' && (
+    <TouchableOpacity 
+      style={{ 
+        marginTop: 15, 
+        paddingVertical: 10, // Más fácil de presionar
+        alignItems: 'center', 
+        flexDirection: 'row', 
+        justifyContent: 'center' 
+      }} 
+      onPress={borrarUltimoPeso}
+    >
+      <Ionicons name="arrow-undo-outline" size={16} color="#FF4444" />
+      <Text style={{ color: '#FF4444', fontSize: 12, marginLeft: 5, fontWeight: 'bold' }}>
+        BORRAR ÚLTIMA ANOTACIÓN
+      </Text>
+    </TouchableOpacity>
+  )}
+
+          
         </View>
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -255,8 +517,12 @@ const chartConfig = {
   backgroundGradientTo: "#003366",
   decimalPlaces: 1,
   color: (opacity = 1) => `rgba(40, 167, 69, ${opacity})`,
-  // EL ERROR ESTABA AQUÍ ABAJO (faltaba el símbolo $ y las llaves)
-  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`, 
+  labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`, // Corregido
+  propsForDots: {
+    r: "5",
+    strokeWidth: "2",
+    stroke: "#28A745"
+  }
 };
 
 const styles = StyleSheet.create({

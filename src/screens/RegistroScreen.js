@@ -59,38 +59,58 @@ export default function RegistroScreen({ onRegistroCompleto }) {
   };
 
   const calcularPlan = async () => {
-    const { nombre, peso, altura, nacimiento, sexo, objetivo, actividad } = datos;
+  const { nombre, peso, altura, nacimiento, sexo, objetivo, actividad } = datos;
 
-    if (!nombre || !peso || !altura || !nacimiento) {
-      Alert.alert("Campos incompletos", "Por favor, llena todos los datos.");
-      return;
-    }
+  // 1. Validar campos vacíos
+  if (!nombre || !peso || !altura || !nacimiento) {
+    Alert.alert("Campos incompletos", "Por favor, llena todos los datos.");
+    return;
+  }
 
-    const edad = obtenerEdad(nacimiento);
-    let tmb = (10 * parseFloat(peso)) + (6.25 * parseFloat(altura)) - (5 * edad);
-    tmb = sexo === 'hombre' ? tmb + 5 : tmb - 161;
+  // 2. Validaciones de Rangos Reales (Seguridad)
+  const pesoNum = parseFloat(peso);
+  const alturaNum = parseFloat(altura);
 
-    let mantenimiento = tmb * actividad;
-    let caloriasFinales = Math.round(
-      objetivo === 'Perder Grasa' ? mantenimiento - 450 : 
-      objetivo === 'Ganar Músculo' ? mantenimiento + 350 : 
-      mantenimiento
-    );
+  if (pesoNum < 35 || pesoNum > 250) {
+    Alert.alert("Peso no válido", "Por favor ingresa un peso entre 35 y 250 kg.");
+    return;
+  }
 
-    const perfilUsuario = {
-      ...datos,
-      edad,
-      caloriasMeta: caloriasFinales,
-      fechaRegistro: new Date().toISOString()
-    };
+  if (alturaNum < 120 || alturaNum > 230) {
+    Alert.alert("Altura no válida", "Por favor ingresa una estatura entre 120 y 230 cm.");
+    return;
+  }
 
-    try {
-      await AsyncStorage.setItem('@perfil_usuario', JSON.stringify(perfilUsuario));
-      onRegistroCompleto(); // Pasamos directo sin el Alert extra para que sea más fluido
-    } catch (e) {
-      Alert.alert("Error", "No pudimos guardar tu perfil.");
-    }
+  // 3. Cálculos
+  const edad = obtenerEdad(nacimiento);
+  
+  // Mifflin-St. Jeor
+  let tmb = (10 * pesoNum) + (6.25 * alturaNum) - (5 * edad);
+  tmb = sexo === 'hombre' ? tmb + 5 : tmb - 161;
+
+  let mantenimiento = tmb * actividad;
+  
+  // UNIFICACIÓN DE NOMBRES (Importante para que el Perfil lo entienda)
+  let caloriasFinales = Math.round(mantenimiento);
+  if (objetivo === 'Perder Grasa') caloriasFinales -= 500;
+  if (objetivo === 'Ganar Músculo') caloriasFinales += 400;
+
+  const perfilUsuario = {
+    ...datos,
+    peso: pesoNum,   // Guardamos como número
+    altura: alturaNum, // Guardamos como número
+    edad,
+    caloriasMeta: caloriasFinales,
+    fechaRegistro: new Date().toISOString()
   };
+
+  try {
+    await AsyncStorage.setItem('@perfil_usuario', JSON.stringify(perfilUsuario));
+    onRegistroCompleto();
+  } catch (e) {
+    Alert.alert("Error", "No pudimos guardar tu perfil.");
+  }
+};
 
   if (cargando) {
     return (

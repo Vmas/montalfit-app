@@ -1,23 +1,54 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, TextInput } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Platform } from 'react-native'; // Útil para diferenciar Android/iOS
 
 export default function PerfilScreen() {
   const [perfil, setPerfil] = useState(null);
+  const [editando, setEditando] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  // Estados temporales para la edición
+  const [tempData, setTempData] = useState({});
 
-  // Refresca los datos cada vez que el usuario entra a la pestaña
   useFocusEffect(
     useCallback(() => {
       cargarPerfil();
     }, [])
   );
 
+  const calcularEdadReal = (fechaStr) => {
+  if (!fechaStr) return 0;
+  const hoy = new Date();
+  const cumple = new Date(fechaStr);
+  let edad = hoy.getFullYear() - cumple.getFullYear();
+  const m = hoy.getMonth() - cumple.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < cumple.getDate())) {
+    edad--;
+  }
+  return edad;
+};
+const onChangeFecha = (event, selectedDate) => {
+  setShowDatePicker(false); 
+  // Si el usuario cancela en Android, el tipo de evento es "set". 
+  // Si es "dismissed", simplemente no hacemos nada.
+  if (event.type === 'set' && selectedDate) {
+    const fechaFormateada = selectedDate.toISOString().split('T')[0];
+    setTempData({ ...tempData, fechaNacimiento: fechaFormateada });
+  }
+};
+
   const cargarPerfil = async () => {
     try {
       const datos = await AsyncStorage.getItem('@perfil_usuario');
-      if (datos) setPerfil(JSON.parse(datos));
+      if (datos) {
+        const parsed = JSON.parse(datos);
+        setPerfil(parsed);
+        setTempData({...parsed, fechaNacimiento: parsed.nacimiento||parsed.fechaNacimiento }); // Inicializamos los datos temporales
+      }
     } catch (e) {
       console.log("Error cargando perfil");
     }
@@ -31,44 +62,84 @@ export default function PerfilScreen() {
     let estado = "Normal";
     let nota = null;
 
-    if (imc < 18.5) {
-      estado = "Bajo peso";
-    } else if (imc >= 25 && imc < 29.9) {
+    if (imc < 18.5) estado = "Bajo peso";
+    else if (imc >= 25 && imc < 29.9) {
       estado = "Sobrepeso";
-      // Si el nivel de actividad es moderado (1.55) o intenso (1.725), mostramos la nota
-      if (perfil.actividad >= 1.55) {
-        nota = "Nota: Tu IMC puede ser elevado debido a tu masa muscular. No es un indicador preciso de grasa.";
-      }
+      if (perfil.actividad >= 1.55) nota = "Nota: Tu IMC puede ser elevado debido a tu masa muscular.";
     } else if (imc >= 30) {
       estado = "Obesidad";
-      if (perfil.actividad >= 1.55) {
-        nota = "Nota: En personas con mucha masa muscular, el IMC no es un indicador preciso de grasa.";
-      }
+      if (perfil.actividad >= 1.55) nota = "Nota: El IMC no es preciso si tienes mucha masa muscular.";
     }
-    
     return { valor: imc, estado, nota };
   };
 
   const getActividadTexto = (val) => {
-    if (val <= 1.2) return 'Sedentario';
-    if (val <= 1.375) return 'Ligera';
-    if (val <= 1.55) return 'Moderada';
+    const v = parseFloat(val);
+    if (v <= 1.2) return 'Sedentario';
+    if (v <= 1.375) return 'Ligera';
+    if (v <= 1.55) return 'Moderada';
     return 'Intensa';
   };
 
+const guardarCambios = async () => {
+  try {
+    // 1. Convertir y Validar números (Evita errores si el campo está vacío)
+    const pesoNum = parseFloat(tempData.peso) || 0;
+    const alturaNum = parseFloat(tempData.altura) || 0;
+    
+    if (alturaNum < 100 || alturaNum > 250) {
+      Alert.alert("Dato no válido", "La estatura debe estar entre 100 y 250 cm.");
+      return;
+    }
+
+    // 2. Calcular edad dinámica (La fuente de la verdad)
+    const edadDinamica = calcularEdadReal(tempData.fechaNacimiento);
+    
+    // Validación extra: Que la fecha sea coherente (entre 14 y 99 años)
+    if (edadDinamica < 14 || edadDinamica > 99) {
+      Alert.alert("Fecha no válida", "La fecha de nacimiento debe corresponder a una edad entre 14 y 99 años.");
+      return;
+    }
+
+    // 3. Fórmula Mifflin-St. Jeor (Cálculo profesional)
+    let tmb = (10 * pesoNum) + (6.25 * alturaNum) - (5 * edadDinamica);
+    tmb = tempData.sexo === 'hombre' ? tmb + 5 : tmb - 161;
+    
+    let calorias = Math.round(tmb * tempData.actividad);
+    if (tempData.objetivo === 'Perder Grasa') calorias -= 500;
+    if (tempData.objetivo === 'Ganar Músculo') calorias += 400;
+
+    // 4. Guardar objeto limpio
+    const nuevoPerfil = { 
+      ...tempData, 
+      nacimiento: tempData.fechaNacimiento,
+      peso: pesoNum,   // Aseguramos que se guarde como número
+      altura: alturaNum, // Aseguramos que se guarde como número
+      edad: edadDinamica, 
+      caloriasMeta: calorias 
+    };
+
+    // Borramos la propiedad vieja para que no haya basura en el JSON
+  delete nuevoPerfil.fechaNacimiento;
+    
+    await AsyncStorage.setItem('@perfil_usuario', JSON.stringify(nuevoPerfil));
+    setPerfil(nuevoPerfil);
+    setEditando(false);
+    Alert.alert("Éxito", "Perfil actualizado. Tus metas se han recalculado automáticamente.");
+  } catch (e) {
+    Alert.alert("Error", "No se pudieron guardar los cambios.");
+  }
+};
   const cerrarSesion = () => {
     Alert.alert(
       "Cerrar Sesión",
-      "¿Estás seguro? Se borrarán tus datos y metas de Aromas de los valles altos.",
+      "¿Estás seguro? Se borrarán tus datos de Aromas de los valles altos.",
       [
         { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Sí, borrar todo", 
-          onPress: async () => {
+        { text: "Sí, borrar todo", onPress: async () => {
             await AsyncStorage.clear();
-            Alert.alert("Datos borrados", "Reinicia la aplicación para crear un nuevo perfil.");
-          } 
-        }
+            Alert.alert("Datos borrados", "Reinicia la app para empezar de cero.");
+        }}
       ]
     );
   };
@@ -85,66 +156,161 @@ export default function PerfilScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         
-        {/* ENCABEZADO */}
+        {/* ENCABEZADO CON BOTÓN EDITAR */}
         <View style={styles.header}>
+          <TouchableOpacity 
+            style={styles.btnEditHeader} 
+            onPress={() => editando ? guardarCambios() : setEditando(true)}
+          >
+            <Ionicons name={editando ? "checkmark-circle" : "pencil"} size={24} color="#28A745" />
+            <Text style={styles.btnEditTxt}>{editando ? "GUARDAR" : "EDITAR"}</Text>
+          </TouchableOpacity>
+
           <View style={styles.avatar}>
             <Text style={styles.avatarTxt}>{perfil.nombre ? perfil.nombre[0].toUpperCase() : 'M'}</Text>
           </View>
-          <Text style={styles.nombre}>{perfil.nombre}</Text>
-          <Text style={styles.objetivo}>{perfil.objetivo}</Text>
+          
+          {editando ? (
+            <TextInput 
+              style={styles.inputNombre}
+              value={tempData.nombre}
+              onChangeText={(t) => setTempData({...tempData, nombre: t})}
+            />
+          ) : (
+            <Text style={styles.nombre}>{perfil.nombre}</Text>
+          )}
         </View>
 
-        {/* CARD DE ESTADÍSTICAS */}
+        {/* CARD DE ESTADÍSTICAS (Ahora incluye el Objetivo) */}
         <View style={styles.statsCard}>
           <View style={styles.statItem}>
             <Text style={styles.statVal}>{perfil.peso}kg</Text>
             <Text style={styles.statLabel}>Peso</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statVal}>{imcData.valor}</Text>
-            <Text style={styles.statLabel}>IMC ({imcData.estado})</Text>
-          </View>
-          <View style={styles.statItem}>
             <Text style={styles.statVal}>{perfil.caloriasMeta}</Text>
             <Text style={styles.statLabel}>Kcal Meta</Text>
           </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statVal, {color: '#d3ec41'}]}>
+                {perfil.objetivo === 'Perder Grasa' ? 'Perder Grasa' : perfil.objetivo === 'Ganar Músculo' ? 'Ganar Músculo' : 'Mantener'}
+            </Text>
+            <Text style={styles.statLabel}>Objetivo</Text>
+          </View>
         </View>
 
-        {/* NOTA DE ATLETA (SÓLO SI CORRESPONDE) */}
-        {imcData.nota && (
-          <View style={styles.notaAtleta}>
-            <Text style={styles.notaAtletaTxt}>⚠️ {imcData.nota}</Text>
-          </View>
-        )}
-
-        {/* SECCIÓN DE DETALLES */}
+        {/* SECCIÓN DE DETALLES EDITABLES */}
         <View style={styles.infoSection}>
           <Text style={styles.infoTitle}>Detalles del Perfil</Text>
+          
+          {/* ALTURA */}
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Nivel de actividad:</Text>
-            <Text style={styles.infoText}>{getActividadTexto(perfil.actividad)}</Text>
+            <Text style={styles.infoLabel}>Altura (cm):</Text>
+            {editando ? (
+              <TextInput 
+                style={styles.inputEdit}
+                keyboardType="numeric"
+                value={String(tempData.altura)}
+                onChangeText={(t) => setTempData({...tempData, altura: Number(t)})}
+              />
+            ) : <Text style={styles.infoText}>{perfil.altura} cm</Text>}
           </View>
+
+          {/* EDAD */}
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Edad:</Text>
-            <Text style={styles.infoText}>{perfil.edad} años</Text>
-          </View>
+  <Text style={styles.infoLabel}>Fecha de Nacimiento:</Text>
+  {editando ? (
+    <View>
+      <TouchableOpacity 
+        style={styles.btnFechaSelector} 
+        onPress={() => setShowDatePicker(true)}
+      >
+        <Text style={styles.btnFechaSelectorTxt}>
+          {tempData.fechaNacimiento || "Seleccionar Fecha"}
+        </Text>
+        <Ionicons name="calendar-outline" size={18} color="#28A745" />
+      </TouchableOpacity>
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={tempData.fechaNacimiento ? new Date(tempData.fechaNacimiento) : new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onChangeFecha}
+          maximumDate={new Date()} // No permite fechas futuras
+        />
+      )}
+    </View>
+  ) : (
+    <Text style={styles.infoText}>{perfil.nacimiento} ({perfil.edad} años)</Text>
+  )}
+</View>
+
+          {/* OBJETIVO SELECTOR (Sincronizado con Registro) */}
+{editando && (
+  <View style={styles.selectorContainer}>
+    <Text style={styles.infoLabel}>Cambiar Objetivo:</Text>
+    <View style={styles.rowWrap}>
+      {['Perder Grasa', 'Mantener', 'Ganar Músculo'].map((obj) => (
+        <TouchableOpacity 
+          key={obj}
+          onPress={() => setTempData({...tempData, objetivo: obj})}
+          style={[styles.chip, tempData.objetivo === obj && styles.chipActive]}
+        >
+          <Text style={[styles.chipText, tempData.objetivo === obj && styles.chipTextActive]}>
+            {obj}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  </View>
+)}
+
+          {/* ACTIVIDAD SELECTOR (SOLO EN EDICIÓN) */}
+          {editando && (
+            <View style={styles.selectorContainer}>
+               <Text style={styles.infoLabel}>Nivel de Actividad:</Text>
+               <View style={styles.rowWrap}>
+                 {[
+                   {l: 'Sedentario', v: 1.2}, 
+                   {l: 'Ligera', v: 1.375}, 
+                   {l: 'Moderada', v: 1.55}, 
+                   {l: 'Intensa', v: 1.725}
+                 ].map((act) => (
+                   <TouchableOpacity 
+                    key={act.l}
+                    onPress={() => setTempData({...tempData, actividad: act.v})}
+                    style={[styles.chip, tempData.actividad === act.v && styles.chipActive]}
+                   >
+                     <Text style={[styles.chipText, tempData.actividad === act.v && styles.chipTextActive]}>{act.l}</Text>
+                   </TouchableOpacity>
+                 ))}
+               </View>
+            </View>
+          )}
+
+          {!editando && (
+            <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Nivel de actividad:</Text>
+                <Text style={styles.infoText}>{getActividadTexto(perfil.actividad)}</Text>
+            </View>
+          )}
+
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Altura:</Text>
-            <Text style={styles.infoText}>{perfil.altura} cm</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Sexo:</Text>
-            <Text style={styles.infoText}>{perfil.sexo === 'hombre' ? 'Masculino' : 'Femenino'}</Text>
+            <Text style={styles.infoLabel}>IMC:</Text>
+            <Text style={styles.infoText}>{imcData.valor} ({imcData.estado})</Text>
           </View>
         </View>
 
-        {/* BOTÓN DE REINICIO */}
-        <TouchableOpacity style={styles.btnReset} onPress={cerrarSesion}>
-          <Text style={styles.btnResetTxt}>BORRAR PERFIL Y REINICIAR</Text>
-        </TouchableOpacity>
+        {/* BOTÓN DE REINICIO (SÓLO SI NO ESTÁ EDITANDO) */}
+        {!editando && (
+          <TouchableOpacity style={styles.btnReset} onPress={cerrarSesion}>
+            <Text style={styles.btnResetTxt}>BORRAR PERFIL Y REINICIAR</Text>
+          </TouchableOpacity>
+        )}
         
         <Text style={styles.brand}>MontalFit - v1.0</Text>
-        
+        <View style={{height: 40}} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -153,52 +319,46 @@ export default function PerfilScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#003366' },
   content: { padding: 25, alignItems: 'center' },
-  header: { alignItems: 'center', marginBottom: 30 },
+  header: { alignItems: 'center', marginBottom: 30, width: '100%' },
+  btnEditHeader: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  btnEditTxt: { color: '#28A745', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
   avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#28A745', justifyContent: 'center', alignItems: 'center', marginBottom: 15, elevation: 5 },
   avatarTxt: { color: '#FFF', fontSize: 36, fontWeight: 'bold' },
   nombre: { color: '#FFF', fontSize: 26, fontWeight: 'bold' },
-  objetivo: { color: '#28A745', fontSize: 16, fontWeight: '700', marginTop: 5 },
-  statsCard: { 
-    flexDirection: 'row', 
-    backgroundColor: 'rgba(255,255,255,0.08)', 
-    borderRadius: 25, 
-    padding: 20, 
-    width: '100%', 
-    justifyContent: 'space-around', 
-    borderWidth: 1, 
-    borderColor: 'rgba(255,255,255,0.1)' 
-  },
-  statItem: { alignItems: 'center' },
-  statVal: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+  inputNombre: { color: '#FFF', fontSize: 24, fontWeight: 'bold', borderBottomWidth: 1, borderBottomColor: '#28A745', width: '80%', textAlign: 'center' },
+  statsCard: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 25, padding: 20, width: '100%', justifyContent: 'space-around', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  statItem: { alignItems: 'center', flex: 1 },
+  statVal: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
   statLabel: { color: '#AAA', fontSize: 11, marginTop: 4 },
-  notaAtleta: {
-    backgroundColor: 'rgba(40, 167, 69, 0.15)',
-    padding: 15,
-    borderRadius: 15,
-    marginTop: 15,
-    width: '100%',
-    borderLeftWidth: 5,
-    borderLeftColor: '#28A745',
-  },
-  notaAtletaTxt: {
-    color: '#FFF',
-    fontSize: 12,
-    fontStyle: 'italic',
-    lineHeight: 18,
-  },
   infoSection: { width: '100%', marginTop: 25, backgroundColor: 'rgba(255,255,255,0.03)', padding: 20, borderRadius: 20 },
-  infoTitle: { color: '#28A745', fontWeight: 'bold', marginBottom: 15, fontSize: 14, textTransform: 'uppercase' },
-  infoRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: 12, 
-    borderBottomWidth: 1, 
-    borderBottomColor: 'rgba(255,255,255,0.05)', 
-    paddingBottom: 8 
-  },
-  infoLabel: { color: '#AAA', fontSize: 14 },
+  infoTitle: { color: '#28A745', fontWeight: 'bold', marginBottom: 15, fontSize: 12, textTransform: 'uppercase' },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', paddingBottom: 8, alignItems: 'center' },
+  infoLabel: { color: '#AAA', fontSize: 13 },
   infoText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
-  btnReset: { marginTop: 40, width: '100%', padding: 18, borderRadius: 15, backgroundColor: 'rgba(255, 68, 68, 0.1)', borderWidth: 1, borderColor: '#FF4444', alignItems: 'center' },
-  btnResetTxt: { color: '#FF4444', fontWeight: 'bold', fontSize: 13, letterSpacing: 1 },
-  brand: { color: 'rgba(255,255,255,0.3)', marginTop: 40, fontSize: 11, fontWeight: '500' }
+  inputEdit: { color: '#28A745', fontSize: 14, fontWeight: 'bold', borderBottomWidth: 1, borderBottomColor: '#28A745', minWidth: 50, textAlign: 'right' },
+  selectorContainer: { marginTop: 15, marginBottom: 10 },
+  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', marginRight: 8, marginBottom: 8 },
+  chipActive: { backgroundColor: '#28A745' },
+  chipText: { color: '#AAA', fontSize: 11, fontWeight: 'bold' },
+  chipTextActive: { color: '#FFF' },
+  btnReset: { marginTop: 30, width: '100%', padding: 18, borderRadius: 15, backgroundColor: 'rgba(255, 68, 68, 0.05)', borderWidth: 1, borderColor: 'rgba(255, 68, 68, 0.3)', alignItems: 'center' },
+  btnResetTxt: { color: '#FF4444', fontWeight: 'bold', fontSize: 11, letterSpacing: 1 },
+  brand: { color: 'rgba(255,255,255,0.2)', marginTop: 30, fontSize: 10 },
+  btnFechaSelector: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: 'rgba(255,255,255,0.05)',
+  paddingHorizontal: 10,
+  paddingVertical: 5,
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: '#28A745',
+},
+btnFechaSelectorTxt: {
+  color: '#28A745',
+  fontWeight: 'bold',
+  marginRight: 10,
+  fontSize: 14,
+}
 });
