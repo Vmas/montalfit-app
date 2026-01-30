@@ -62,16 +62,41 @@ const configurarNotificaciones = async () => {
     if (finalStatus !== 'granted') return;
   }
 
-  // 3. Programar el recordatorio diario (7:30 AM)
+  // 3. Programar el recordatorio diario de PESO (7:30 AM)
   await Notifications.cancelAllScheduledNotificationsAsync();
+  
   await Notifications.scheduleNotificationAsync({
     content: {
       title: "🏆 Reto MontalFit",
-      body: "Es hora de registrar tu peso para Aromas de los valles altos. ¡Vamos!",
+      body: "Es hora de registrar tu peso en MontalFit. ¡Vamos!",
     },
     trigger: { hour: 7, minute: 30, repeats: true },
   });
-};
+
+  // 4. NUEVO: Programar recordatorios de AGUA (Ej: 11:00, 15:00 y 19:00)
+  const recordatoriosAgua = [
+    { h: 11, m: 0 },
+    { h: 15, m: 0 },
+    { h: 19, m: 0 }
+  ];
+
+  for (const tiempo of recordatoriosAgua) {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "💧 Hidratación - MontalFit",
+        body: "No olvides beber agua para potenciar tu metabolismo. ¡Tómate un vaso!",
+        sound: true,
+      },
+      trigger: { 
+        hour: tiempo.h, 
+        minute: tiempo.m, 
+        repeats: true 
+      },
+    });
+  }
+}
+
+
 
 
 //prueba de notificaciones
@@ -236,6 +261,7 @@ Alert.alert(
         setEnReto(false);
         animacionBarra.setValue(0);
         setDiaDelReto(1); // Reset local del estado
+        Alert.alert("Reto Reiniciado", "Puedes volver a empezar cuando estés listo.");
     }}
   ]
 );
@@ -434,7 +460,9 @@ Alert.alert(
             data={{ 
   labels: fechas.length > 0 ? fechas : ["-"], // Si no hay fechas, pone un guion
   datasets: [{ 
-    data: historialPeso.length > 0 ? historialPeso : [0] // Si no hay pesos, pone 0 para no crashear
+    // Si solo hay un peso, duplicamos el punto para que la línea sea visible
+      data: historialPeso.length === 1 ? [historialPeso[0], historialPeso[0]] : 
+            historialPeso.length > 0 ? historialPeso : [0] // Si no hay pesos, pone 0 para no crashear
   }] 
 }}
             width={Dimensions.get("window").width - 70}
