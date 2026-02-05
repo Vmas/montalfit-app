@@ -9,18 +9,6 @@ import * as Sharing from 'expo-sharing';
 import { useIsFocused } from '@react-navigation/native';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
-import { Platform } from 'react-native';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
 export default function ProgresoScreen() {
   const chartRef = useRef();
   const isFocused = useIsFocused();
@@ -34,82 +22,6 @@ export default function ProgresoScreen() {
   const [enReto, setEnReto] = useState(false);
   const [diaDelReto, setDiaDelReto] = useState(1);
   const animacionBarra = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-  configurarNotificaciones();
-  //enviarNotificacionPrueba();
-}, []);
-
-const configurarNotificaciones = async () => {
-  // 1. Configuración de Canal para Android (Debe ir primero)
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Recordatorios',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#28A745',
-    });
-  }
-
-  // 2. Pedir permisos
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') return;
-  }
-
-  // 3. Programar el recordatorio diario de PESO (7:30 AM)
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "🏆 Reto MontalFit",
-      body: "Es hora de registrar tu peso en MontalFit. ¡Vamos!",
-    },
-    trigger: { hour: 7, minute: 30, repeats: true },
-  });
-
-  // 4. NUEVO: Programar recordatorios de AGUA (Ej: 11:00, 15:00 y 19:00)
-  const recordatoriosAgua = [
-    { h: 11, m: 0 },
-    { h: 15, m: 0 },
-    { h: 19, m: 0 }
-  ];
-
-  for (const tiempo of recordatoriosAgua) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "💧 Hidratación - MontalFit",
-        body: "No olvides beber agua para potenciar tu metabolismo. ¡Tómate un vaso!",
-        sound: true,
-      },
-      trigger: { 
-        hour: tiempo.h, 
-        minute: tiempo.m, 
-        repeats: true 
-      },
-    });
-  }
-}
-
-
-
-
-//prueba de notificaciones
-const enviarNotificacionPrueba = async () => {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "✅ ¡Sistema Activo!",
-      body: "Las notificaciones de MontalFit están configuradas correctamente.",
-      sound: true,
-    },
-    trigger: null, // "null" significa que se envía de inmediato
-  });
-};
 
 
 
@@ -163,7 +75,12 @@ if (fechaInicioStr) {
   const diffTime = hoy.getTime() - inicio.getTime();
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 porque el día que inicia es el Día 1
 
-  setDiaDelReto(diffDays > 90 ? 90 : diffDays);
+  if (diffDays >= 90) {
+  setDiaDelReto(90);
+  // Opcional: Podrías lanzar una alerta automática de felicitación aquí
+} else {
+  setDiaDelReto(diffDays);
+}
 }
 
       // 3. Perfil y Consumo
@@ -189,7 +106,12 @@ if (fechaInicioStr) {
   const generarPDFMontalFit = async () => {
   try {
     // 1. Capturar la gráfica como imagen Base64
-    const uri = await captureRef(chartRef, {
+    if (!chartRef || !chartRef.current) {
+      Alert.alert("Error", "La gráfica no está disponible. Asegúrate de que la sección de progreso sea visible antes de exportar.");
+      return;
+    }
+
+    const uri = await captureRef(chartRef.current, {
       format: "jpg",
       quality: 0.8,
       result: "base64",
@@ -250,18 +172,24 @@ if (fechaInicioStr) {
         ]
       );
     } else {
-      // Dentro de gestionarReto, en el alert de abandono:
+      // alert de abandono y reinicio:
+
+const mensajeTitulo = diaDelReto >= 90 ? "¡Felicidades Campeón!" : "¿Reiniciar el Reto?";
+const mensajeDesc = diaDelReto >= 90 
+  ? "Has completado los 90 días de MontalFit. ¿Quieres reiniciar el contador para un nuevo ciclo de disciplina?" 
+  : "Se borrará tu fecha de inicio y el contador volverá a 1. ¿Confirmas?";
+
 Alert.alert(
-  "¿Reiniciar el Reto?", 
-  "Se borrará tu fecha de inicio y el contador de días volverá a 1. Tu historial de peso en la gráfica NO se borrará. ¿Confirmas?", 
+  mensajeTitulo, 
+  mensajeDesc, 
   [
-    { text: "Seguir en el reto", style: "cancel" },
-    { text: "Sí, reiniciar días", onPress: async () => {
+    { text: diaDelReto >= 90 ? "Mantener récord" : "Seguir en el reto", style: "cancel" },
+    { text: "Sí, reiniciar", onPress: async () => {
         await AsyncStorage.removeItem('@inicio_reto_montalfit');
         setEnReto(false);
         animacionBarra.setValue(0);
-        setDiaDelReto(1); // Reset local del estado
-        Alert.alert("Reto Reiniciado", "Puedes volver a empezar cuando estés listo.");
+        setDiaDelReto(1);
+        Alert.alert("Listo", "El reto se ha reiniciado. ¡Vamos por más!");
     }}
   ]
 );
@@ -441,7 +369,19 @@ Alert.alert(
                 </View>
               )}
 
-              <TouchableOpacity onPress={gestionarReto}><Text style={styles.abandonarTxt}>Abandonar reto</Text></TouchableOpacity>
+              {/* Lógica de botones al final del reto */}
+{diaDelReto >= 90 ? (
+  <TouchableOpacity 
+    style={[styles.btnReto, {backgroundColor: '#28A745', marginTop: 15}]} 
+    onPress={gestionarReto}
+  >
+    <Text style={styles.btnRetoTxt}>¡RETO COMPLETADO! EMPEZAR OTRA VEZ</Text>
+  </TouchableOpacity>
+) : (
+  <TouchableOpacity onPress={gestionarReto}>
+    <Text style={styles.abandonarTxt}>Abandonar reto</Text>
+  </TouchableOpacity>
+)}
             </View>
           ) : (
             <View>

@@ -8,9 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import alimentosLocales from '../data/alimentos.json'; 
+import alimentosLocales from '../data/alimentos.json';
+import Constants from 'expo-constants';
 
-const USDA_API_KEY = 'UyLYCL8Bq6X0QmrQzuz5vxF9tHrnj2QlaxsaAvRd'; 
+// Leer API KEY desde app config (expo extra) para evitar dejarla hardcodeada
+const USDA_API_KEY = Constants.manifest?.extra?.USDA_API_KEY || null;
 
 export default function DashboardScreen() {
   // --- ESTADOS ---
@@ -109,39 +111,55 @@ export default function DashboardScreen() {
   };
 
   // --- GUARDADO DE ALIMENTOS (TU LÓGICA DE FACTOR ORIGINAL) ---
-  const confirmarGuardado = async () => {
-    const llave = getFechaKey(fechaConsulta);
-    const esReceta = alimentoSeleccionado.subnombre?.includes('Recetas');
-    
-    let factor;
-    let sufijo;
+ const confirmarGuardado = async () => {
+  const llave = getFechaKey(fechaConsulta);
+  
+  const cantLimpia = cantidad.replace(',', '.');
+  const cantNum = parseFloat(cantLimpia) || 0;
+  
+  if (cantNum <= 0) {
+    Alert.alert("Error", "Ingresa una cantidad válida");
+    return;
+  }
 
-    if (esReceta) {
-      factor = parseFloat(cantidad);
-      sufijo = parseFloat(cantidad) === 1 ? " porción" : " porciones";
-    } else {
-      // Tu lógica: si es unidad usa 50/100, si no usa cantidad/100
-      factor = esPorUnidad ? (parseFloat(cantidad) * 50) / 100 : parseFloat(cantidad) / 100;
-      sufijo = esPorUnidad ? "u" : "g";
-    }
+  let factor;
+  let sufijo;
 
-    const itemFinal = {
-      ...alimentoSeleccionado,
-      nombre: `${alimentoSeleccionado.nombre} (${cantidad}${sufijo})`,
-      calorias: alimentoSeleccionado.calorias * factor,
-      p: alimentoSeleccionado.p * factor,
-      c: alimentoSeleccionado.c * factor,
-      g: alimentoSeleccionado.g * factor,
-      id: Date.now()
-    };
+  if (esPorUnidad) {
+    const pesoRef = alimentoSeleccionado.pesoUnidad || 100; 
+    factor = (cantNum * pesoRef) / 100;
+    sufijo = "u";
+  } else {
+    factor = cantNum / 100;
+    sufijo = "g";
+  }
 
+  const itemFinal = {
+    ...alimentoSeleccionado,
+    // Usamos cantNum para el nombre para que siempre use el punto decimal correcto
+    nombre: `${alimentoSeleccionado.nombre} (${cantNum}${sufijo})`,
+    // Aplicamos factor y redondeamos a 1 decimal para estabilidad visual
+    calorias: parseFloat(((Number(alimentoSeleccionado.calorias) || 0) * factor).toFixed(1)),
+    p: parseFloat(((Number(alimentoSeleccionado.p) || 0) * factor).toFixed(1)),
+    c: parseFloat(((Number(alimentoSeleccionado.c) || 0) * factor).toFixed(1)),
+    g: parseFloat(((Number(alimentoSeleccionado.g) || 0) * factor).toFixed(1)),
+    id: Date.now(),
+    fuente: alimentoSeleccionado.fuente || 'Local' 
+  };
+
+  try {
     const nuevaLista = [...comidasDelDia, itemFinal];
     setComidasDelDia(nuevaLista);
     await AsyncStorage.setItem(`@diario_${llave}`, JSON.stringify(nuevaLista));
+    
     setModalCantidad(false);
     setBusqueda('');
     setResultados([]);
-  };
+    setCantidad('1');
+  } catch (e) {
+    Alert.alert("Error", "No se pudo guardar");
+  }
+};
 
   // --- EL RESTO DE FUNCIONES (BUSCADOR, ELIMINAR, ETC) ---
   const buscarAlimento = async () => {
@@ -154,6 +172,13 @@ export default function DashboardScreen() {
       if (locales.length > 0) {
         setResultados(locales.map(l => ({ ...l, fuente: 'Local' })));
       } else {
+        if (!USDA_API_KEY) {
+          Alert.alert('API key ausente', 'No se configuró la clave de USDA. Solo se buscan alimentos locales.');
+          setResultados([]);
+          setCargando(false);
+          return;
+        }
+
         const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}&query=${busqueda}&pageSize=15`);
         const data = await res.json();
         const procesados = (data.foods || []).map(f => ({
@@ -188,28 +213,49 @@ export default function DashboardScreen() {
   };
 
   const guardarManual = async () => {
-    const item = {
-      nombre: manualFood.nombre || "Manual",
-      calorias: parseFloat(manualFood.kcal) || 0,
-      p: parseFloat(manualFood.p) || 0,
-      c: parseFloat(manualFood.c) || 0,
-      g: parseFloat(manualFood.g) || 0,
-      id: Date.now(),
-      subnombre: "Entrada Manual",
-      fuente: 'Manual'
-    };
+  // 1. Validaciones básicas
+  if (!manualFood.nombre.trim() || !manualFood.kcal) {
+    Alert.alert("Campos incompletos", "Por favor completa al menos el nombre y las calorías.");
+    return;
+  }
+
+  // 2. Aseguramos que los valores sean números reales (evitamos NaN)
+  const item = {
+    nombre: manualFood.nombre.trim(),
+    calorias: parseFloat(manualFood.kcal) || 0,
+    p: parseFloat(manualFood.p) || 0,
+    c: parseFloat(manualFood.c) || 0,
+    g: parseFloat(manualFood.g) || 0,
+    id: Date.now(),
+    subnombre: "Entrada Manual",
+    fuente: 'Manual'
+  };
+
+  try {
     const nuevaLista = [...comidasDelDia, item];
-    setComidasDelDia(nuevaLista);
     const llave = getFechaKey(fechaConsulta);
+    
+    // Actualizamos estado y storage
+    setComidasDelDia(nuevaLista);
     await AsyncStorage.setItem(`@diario_${llave}`, JSON.stringify(nuevaLista));
+    
+    // Reset de UI
     setModalManual(false);
     setManualFood({ nombre: '', kcal: '', p: '', c: '', g: '' });
-  };
+    
+    Alert.alert("Éxito", "Alimento guardado correctamente.");
+  } catch (e) {
+    Alert.alert("Error", "No se pudo guardar el alimento.");
+  }
+};
 
   const consumido = comidasDelDia.reduce((acc, i) => acc + (Number(i.calorias) || 0), 0);
   const tP = comidasDelDia.reduce((acc, i) => acc + (Number(i.p) || 0), 0);
   const tC = comidasDelDia.reduce((acc, i) => acc + (Number(i.c) || 0), 0);
   const tG = comidasDelDia.reduce((acc, i) => acc + (Number(i.g) || 0), 0);
+
+  // Evita divisiones por cero cuando las metas todavía no están cargadas
+  const porcentajeConsumido = metaCalorias > 0 ? Math.min(100, (consumido / metaCalorias) * 100) : 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -237,7 +283,7 @@ export default function DashboardScreen() {
           <Text style={styles.restantes}>{Math.max(0, Math.round(metaCalorias - consumido))}</Text>
           <Text style={styles.sub}>Calorías Restantes</Text>
           <View style={styles.barBg}>
-            <View style={[styles.barFill, {width: `${Math.min(100, (consumido/metaCalorias)*100)}%`}]} />
+            <View style={[styles.barFill, { width: `${porcentajeConsumido}%` }]} />
           </View>
         </View>
 
@@ -250,7 +296,7 @@ export default function DashboardScreen() {
             <View key={idx} style={styles.circleContainer}>
               <View style={[styles.macroCircle, { borderColor: m.color }]}>
                 <View style={[styles.fillIndicator, { 
-                  height: `${Math.min(100, (m.val / m.meta) * 100)}%`, 
+                  height: `${m.meta ? Math.min(100, (m.val / m.meta) * 100) : 0}%`, 
                   backgroundColor: m.color, opacity: 0.2 
                 }]} />
                 <Text style={styles.mV}>{Math.round(m.val)}g</Text>
@@ -285,70 +331,163 @@ export default function DashboardScreen() {
         </TouchableOpacity>
 
         {modalManual && (
-          <View style={styles.manualForm}>
-            <TextInput style={styles.inputM} placeholder="Nombre" placeholderTextColor="#999" onChangeText={t => setManualFood({...manualFood, nombre: t})} />
-            <View style={styles.row}>
-                <TextInput style={[styles.inputM, {flex:1, marginRight:5}]} placeholder="Kcal" keyboardType="numeric" placeholderTextColor="#999" onChangeText={t => setManualFood({...manualFood, kcal: t})} />
-                <TextInput style={[styles.inputM, {flex:1}]} placeholder="Prot" keyboardType="numeric" placeholderTextColor="#999" onChangeText={t => setManualFood({...manualFood, p: t})} />
-            </View>
-            <TouchableOpacity style={styles.btnG} onPress={guardarManual}><Text style={styles.btnT}>GUARDAR</Text></TouchableOpacity>
-          </View>
-        )}
+  <View style={styles.manualForm}>
+    <TextInput 
+      style={styles.inputM} 
+      placeholder="Nombre del alimento" 
+      placeholderTextColor="#999" 
+      value={manualFood.nombre}
+      onChangeText={t => setManualFood({...manualFood, nombre: t})} 
+    />
+    
+    <View style={styles.row}>
+      <TextInput 
+        style={[styles.inputM, {flex: 1, marginRight: 5}]} 
+        placeholder="Kcal" 
+        keyboardType="numeric" 
+        placeholderTextColor="#999" 
+        value={manualFood.kcal}
+        onChangeText={t => setManualFood({...manualFood, kcal: t})} 
+        accessibilityLabel="Campo para ingresar calorías"
+        accessibilityHint="Ingresa un número entero"
+      />
 
-        <Text style={styles.tituloSec}>{resultados.length > 0 ? "Resultados:" : "Hoy:"}</Text>
-        {(resultados.length > 0 ? resultados : comidasDelDia).map((item, index) => (
-          <View key={item.id || index} style={styles.itemContainer}>
-            <TouchableOpacity style={styles.item} onPress={() => resultados.length > 0 ? abrirModalCantidad(item) : null} disabled={resultados.length === 0}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemName} numberOfLines={1}>{item.nombre}</Text>
-                <Text style={styles.itemMacros}>P: {Number(item.p).toFixed(1)}g | C: {Number(item.c).toFixed(1)}g | G: {Number(item.g).toFixed(1)}g</Text>
-              </View>
-              <View style={{alignItems: 'flex-end'}}>
-                <Text style={styles.itemK}>{Math.round(item.calorias)}</Text>
-                <Text style={{color: '#28A745', fontSize: 10}}>kcal</Text>
-              </View>
-            </TouchableOpacity>
-            {resultados.length === 0 && (
-              <TouchableOpacity onPress={() => eliminarAlimento(item.id)} style={styles.btnBorrar}>
-                <Ionicons name="trash-outline" size={20} color="#FF4444" />
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
-        <View style={{height: 100}} />
-      </ScrollView>
+      <TextInput 
+        style={[styles.inputM, {flex: 1}]} 
+        placeholder="Prot (g: 0.0)" 
+        keyboardType="numeric" 
+        placeholderTextColor="#999" 
+        value={manualFood.p}
+        onChangeText={t => setManualFood({...manualFood, p: t})} 
+        accessibilityLabel="Campo para ingresar gramos de proteína"
+        accessibilityHint="Ingresa un número decimal usando punto como separador de decimales"
+      />
+    </View>
 
-      {/* MODAL CANTIDAD */}
-      <Modal visible={modalCantidad} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCant}>
-            <Text style={styles.modalTitle}>{alimentoSeleccionado?.nombre}</Text>
-            {!(alimentoSeleccionado?.subnombre?.includes('Recetas')) && (
-              <View style={styles.unitSelector}>
-                <TouchableOpacity onPress={() => setEsPorUnidad(false)} style={[styles.unitBtn, !esPorUnidad && styles.unitBtnActive]}>
-                  <Text style={styles.unitBtnText}>Gramos</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => setEsPorUnidad(true)} style={[styles.unitBtn, esPorUnidad && styles.unitBtnActive]}>
-                  <Text style={styles.unitBtnText}>Unidades</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <TextInput style={styles.inputCant} keyboardType="numeric" value={cantidad} onChangeText={setCantidad} autoFocus />
-            <View style={styles.row}>
-              <TouchableOpacity style={[styles.btnG, {backgroundColor: '#444', flex: 1, marginRight: 10}]} onPress={() => setModalCantidad(false)}>
-                <Text style={styles.btnT}>VOLVER</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btnG, {flex: 2}]} onPress={confirmarGuardado}>
-                <Text style={styles.btnT}>AÑADIR</Text>
-              </TouchableOpacity>
-            </View>
+    <View style={styles.row}>
+      <TextInput 
+        style={[styles.inputM, {flex: 1, marginRight: 5}]} 
+        placeholder="Carbs (g: 0.0)" 
+        keyboardType="numeric" 
+        placeholderTextColor="#999" 
+        value={manualFood.c}
+        onChangeText={t => setManualFood({...manualFood, c: t})} 
+        accessibilityLabel="Campo para ingresar gramos de carbohidratos"
+        accessibilityHint="Ingresa un número decimal usando punto como separador de decimales"
+      />
+      <TextInput 
+        style={[styles.inputM, {flex: 1}]} 
+        placeholder="Grasas (g: 0.0)" 
+        keyboardType="numeric" 
+        placeholderTextColor="#999" 
+        value={manualFood.g}
+        onChangeText={t => setManualFood({...manualFood, g: t})} 
+        accessibilityLabel="Campo para ingresar gramos de grasas"
+        accessibilityHint="Ingresa un número decimal usando punto como separador de decimales"
+      />
+    </View>
+
+    <TouchableOpacity style={styles.btnG} onPress={guardarManual}>
+      <Text style={styles.btnT}>GUARDAR ALIMENTO</Text>
+    </TouchableOpacity>
+  </View>
+)}
+
+       <Text style={styles.tituloSec}>{resultados.length > 0 ? "Resultados:" : "Hoy:"}</Text>
+{(resultados.length > 0 ? resultados : comidasDelDia).map((item, index) => (
+  <View key={item.id || index} style={styles.itemContainer}>
+    <TouchableOpacity 
+      style={styles.item} 
+      onPress={() => resultados.length > 0 ? abrirModalCantidad(item) : null} 
+      disabled={resultados.length === 0}
+    >
+      <View style={{ flex: 1 }}>
+        <Text style={styles.itemName} numberOfLines={1}>{item.nombre}</Text>
+        
+        {/* Contenedor horizontal para Macros + Badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+          <Text style={styles.itemMacros}>
+            P: {(Number(item.p) || 0).toFixed(1)}g | C: {(Number(item.c) || 0).toFixed(1)}g | G: {(Number(item.g) || 0).toFixed(1)}g
+          </Text>
+          
+          {/* Badge dinámico */}
+          <View style={[
+            styles.badge, 
+            { 
+              backgroundColor: item.fuente === 'USDA' ? '#3b82f6' : 
+                               item.fuente === 'Manual' ? '#6c757d' : '#28A745',
+              marginLeft: 8 
+            }
+          ]}>
+            <Text style={styles.badgeText}>{item.fuente || 'LOCAL'}</Text>
           </View>
         </View>
-      </Modal>
+      </View>
+
+      <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+        <Text style={styles.itemK}>{Math.round(item.calorias)}</Text>
+        <Text style={{ color: '#28A745', fontSize: 10, fontWeight: 'bold' }}>kcal</Text>
+      </View>
+    </TouchableOpacity>
+
+    {resultados.length === 0 && (
+      <TouchableOpacity onPress={() => eliminarAlimento(item.id)} style={styles.btnBorrar}>
+        <Ionicons name="trash-outline" size={20} color="#FF4444" />
+      </TouchableOpacity>
+    )}
+  </View>
+))}
+<View style={{ height: 100 }} /> 
+     </ScrollView>
+
+      {/* MODAL CANTIDAD */}
+<Modal visible={modalCantidad} transparent animationType="slide">
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalCant}>
+      <Text style={styles.modalTitle}>{alimentoSeleccionado?.nombre}</Text>
+      
+      {/* Selector de unidad simple para todo */}
+      <View style={styles.unitSelector}>
+        <TouchableOpacity 
+          onPress={() => { setEsPorUnidad(false); setCantidad('100'); }} 
+          style={[styles.unitBtn, !esPorUnidad && styles.unitBtnActive]}
+        >
+          <Text style={styles.unitBtnText}>Gramos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => { setEsPorUnidad(true); setCantidad('1'); }} 
+          style={[styles.unitBtn, esPorUnidad && styles.unitBtnActive]}
+        >
+          <Text style={styles.unitBtnText}>Unidades</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TextInput 
+        style={styles.inputCant} 
+        keyboardType="numeric" 
+        value={cantidad} 
+        onChangeText={setCantidad} 
+        autoFocus 
+      />
+
+      <View style={styles.row}>
+        <TouchableOpacity 
+          style={[styles.btnG, {backgroundColor: '#444', flex: 1, marginRight: 10}]} 
+          onPress={() => setModalCantidad(false)}
+        >
+          <Text style={styles.btnT}>VOLVER</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.btnG, {flex: 2}]} onPress={confirmarGuardado}>
+          <Text style={styles.btnT}>AÑADIR</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
     </SafeAreaView>
   );
 }
-// ... (Aquí van tus estilos originales, esos no los toqué)
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#003366', paddingHorizontal: 20 },

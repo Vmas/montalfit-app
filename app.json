@@ -28,5 +28,9 @@
     "plugins": [
       "@react-native-community/datetimepicker"
     ]
+    ,
+    "extra": {
+      "USDA_API_KEY": ""
+    }
   }
 }

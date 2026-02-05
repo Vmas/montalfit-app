@@ -133,12 +133,42 @@ const guardarCambios = async () => {
   const cerrarSesion = () => {
     Alert.alert(
       "Cerrar Sesión",
-      "¿Estás seguro? Se borrarán tus datos de Aromas de los valles altos.",
+      "¿Estás seguro? Se borrarán tus datos de la aplicación.",
       [
         { text: "Cancelar", style: "cancel" },
-        { text: "Sí, borrar todo", onPress: async () => {
-            await AsyncStorage.clear();
-            Alert.alert("Datos borrados", "Reinicia la app para empezar de cero.");
+        { text: "Sí, borrar datos clave", onPress: async () => {
+            try {
+              // Eliminamos únicamente las claves relevantes para evitar borrar otros datos
+              await AsyncStorage.multiRemove(['@perfil_usuario','@historial_peso','@inicio_reto_montalfit']);
+              Alert.alert("Datos borrados", "Se eliminaron los datos principales. Reinicia la app para empezar de cero.");
+            } catch (e) {
+              Alert.alert("Error", "No se pudieron borrar todos los datos.");
+            }
+        }}
+      ]
+    );
+  };
+
+  const limpiarDiarios = () => {
+    Alert.alert(
+      "Limpiar diarios",
+      "¿Eliminar todos los registros diarios almacenados en el dispositivo? Esta acción no se puede deshacer.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Sí, eliminar", onPress: async () => {
+            try {
+              const keys = await AsyncStorage.getAllKeys();
+              const diarios = keys.filter(k => k && k.startsWith('@diario_'));
+              if (diarios.length === 0) {
+                Alert.alert('No hay diarios', 'No se encontraron registros diarios en el storage.');
+                return;
+              }
+              await AsyncStorage.multiRemove(diarios);
+              Alert.alert('Listo', 'Se eliminaron los registros diarios.');
+            } catch (e) {
+              console.log('Error limpiando diarios', e);
+              Alert.alert('Error', 'No se pudieron eliminar todos los diarios.');
+            }
         }}
       ]
     );
@@ -211,7 +241,7 @@ const guardarCambios = async () => {
                 style={styles.inputEdit}
                 keyboardType="numeric"
                 value={String(tempData.altura)}
-                onChangeText={(t) => setTempData({...tempData, altura: Number(t)})}
+                onChangeText={(t) => setTempData({...tempData, altura: t})}
               />
             ) : <Text style={styles.infoText}>{perfil.altura} cm</Text>}
           </View>
@@ -308,8 +338,30 @@ const guardarCambios = async () => {
             <Text style={styles.btnResetTxt}>BORRAR PERFIL Y REINICIAR</Text>
           </TouchableOpacity>
         )}
+
+        {/* BOTÓN PARA LIMPIAR DIARIOS */}
+        <TouchableOpacity style={[styles.btnReset, { marginTop: 12 }]} onPress={limpiarDiarios}>
+          <Text style={[styles.btnResetTxt, { color: '#FFFFFF' }]}>LIMPIAR REGISTROS DIARIOS</Text>
+        </TouchableOpacity>
+
+        {/* SECCIÓN DE ACLARACIONES LEGALES */}
+<TouchableOpacity 
+  style={styles.btnInfo} 
+  onPress={() => Alert.alert(
+    "Aviso Importante y Privacidad",
+    "• No es una app médica: Destinada a apoyar el estilo de vida como referencia aproximada. Consulta siempre a un nutricionista.\n\n" +
+    "• Datos Locales: Tu información se guarda solo en este teléfono. Al cambiar de dispositivo o borrar la app, los datos se perderán.\n\n" +
+    "• Recomendación: Se sugiere ejercicio de fuerza para optimizar resultados.\n\n" +
+    "• Herramienta en crecimiento: Los datos pueden no ser exactos, úsalos como guía referencial.",
+    [{ text: "Entendido" }]
+  )}
+>
+  <Ionicons name="information-circle-outline" size={20} color="#AAA" />
+  <Text style={styles.btnInfoTxt}>Información Legal y Privacidad</Text>
+</TouchableOpacity>
         
-        <Text style={styles.brand}>MontalFit - v1.0</Text>
+        <Text style={styles.brand}>MontalFit - v1.0 - Desarrollado por Victor Aliendo</Text>
+        <Text style={styles.brand}> vmas.system@gmail.com</Text>
         <View style={{height: 40}} />
       </ScrollView>
     </SafeAreaView>
@@ -360,5 +412,18 @@ btnFechaSelectorTxt: {
   fontWeight: 'bold',
   marginRight: 10,
   fontSize: 14,
-}
+},btnInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 10,
+  },
+  btnInfoTxt: {
+    color: '#AAA',
+    fontSize: 12,
+    marginLeft: 8,
+    textDecorationLine: 'underline',
+  },
 });
