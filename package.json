@@ -33,6 +33,7 @@
   "devDependencies": {
     "@types/react": "~19.1.10",
     "expo-module-scripts": "^5.0.8",
+    "jimp": "^1.6.0",
     "typescript": "~5.9.2"
   }
 }
