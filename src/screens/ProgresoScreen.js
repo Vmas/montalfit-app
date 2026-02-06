@@ -17,6 +17,7 @@ export default function ProgresoScreen() {
   const [fechas, setFechas] = useState(['-']);
   const [resumenComida, setResumenComida] = useState({ kcal: 0, p: 0, c: 0, g: 0 });
   const [meta, setMeta] = useState(2000);
+  const [nombreUsuario, setNombreUsuario] = useState('Usuario');
 
   // ESTADOS DEL RETO MONTALFIT
   const [enReto, setEnReto] = useState(false);
@@ -85,7 +86,13 @@ if (fechaInicioStr) {
 
       // 3. Perfil y Consumo
       const perfil = await AsyncStorage.getItem('@perfil_usuario');
-      if (perfil) setMeta(JSON.parse(perfil).caloriasMeta);
+      if (perfil) {
+        const perfilObj = JSON.parse(perfil);
+        if (perfilObj.caloriasMeta) setMeta(perfilObj.caloriasMeta);
+        // Nombre del usuario para el PDF y cabeceras
+        const nombre = perfilObj.nombre || perfilObj.name || perfilObj.nombreUsuario || perfilObj.usuario;
+        if (nombre) setNombreUsuario(nombre);
+      }
 
       const hoyIso = new Date().toISOString().split('T')[0];
       const datosComida = await AsyncStorage.getItem(`@diario_${hoyIso}`);
@@ -104,57 +111,76 @@ if (fechaInicioStr) {
   };
 
   const generarPDFMontalFit = async () => {
-  try {
-    // 1. Capturar la gráfica como imagen Base64
-    if (!chartRef || !chartRef.current) {
-      Alert.alert("Error", "La gráfica no está disponible. Asegúrate de que la sección de progreso sea visible antes de exportar.");
-      return;
+    try {
+      const hoyStr = new Date().toLocaleDateString();
+
+      // Intentamos capturar la gráfica si está disponible; si no, generamos un PDF con texto
+      let imagenBase64 = null;
+      if (chartRef && chartRef.current) {
+        try {
+          const uri = await captureRef(chartRef.current, {
+            format: 'jpg',
+            quality: 0.8,
+            result: 'base64',
+          });
+          imagenBase64 = `data:image/jpg;base64,${uri}`;
+        } catch (err) {
+          console.log('captureRef falló:', err);
+          imagenBase64 = null;
+        }
+      }
+
+      const estadoReto = diaDelReto >= 90 ? 'COMPLETADO' : diaDelReto >= 30 ? 'EN PROGRESO' : 'INCOMPLETO';
+      const watermark = diaDelReto < 90 ? `<div style="position:absolute; top:40%; left:0; width:100%; text-align:center; font-size:60px; color: rgba(0,0,0,0.06); transform: rotate(-20deg);">${estadoReto}</div>` : '';
+
+      const imagenBloque = imagenBase64 ? `<img src="${imagenBase64}" style="width:100%; border-radius:10px; border:1px solid #ddd;" />` : `<div style="width:100%; height:220px; display:flex; align-items:center; justify-content:center; background:#f7f7f7; border-radius:10px; border:1px solid #eee; color:#999;">Gráfica no disponible</div>`;
+
+      const pesoActual = historialPeso && historialPeso.length > 0 ? historialPeso[historialPeso.length - 1] : '-';
+
+      const htmlContent = `
+        <html>
+          <body style="font-family: sans-serif; padding: 40px; color: #333; position: relative;">
+            ${watermark}
+            <div style="text-align: center;">
+              <h1 style="color: #003366; margin-bottom: 5px;">MONTALFIT</h1>
+              <p style="color: #28A745; font-weight: bold;">Reporte de Progreso Personal</p>
+            </div>
+
+            <div style="background: #f4f4f4; padding: 20px; border-radius: 15px; margin: 30px 0;">
+              <p><b>Usuario:</b> ${nombreUsuario}</p>
+              <p><b>Día del Reto:</b> ${diaDelReto}/90</p>
+              <p><b>Estado:</b> ${estadoReto}</p>
+              <p><b>Fecha de Reporte:</b> ${hoyStr}</p>
+              <p><b>Peso Actual:</b> ${pesoActual} kg</p>
+            </div>
+
+            <h3 style="color: #003366;">Evolución de Peso</h3>
+            ${imagenBloque}
+
+            <div style="margin-top: 30px;">
+              <h4 style="color:#003366;">Resumen Nutricional (hoy)</h4>
+              <p>Kcal: ${Math.round(resumenComida.kcal)} / Meta: ${meta}</p>
+              <p>Proteína: ${Math.round(resumenComida.p)} g</p>
+              <p>Carbohidratos: ${Math.round(resumenComida.c)} g</p>
+              <p>Grasas: ${Math.round(resumenComida.g)} g</p>
+            </div>
+
+            <div style="margin-top: 50px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px;">
+              Este reporte fue generado automáticamente por la App MontalFit.<br/>
+              &copy; 2026 MontalFit.
+            </div>
+          </body>
+        </html>
+      `;
+
+      const { uri: pdfUri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(pdfUri);
+
+    } catch (e) {
+      console.log(e);
+      Alert.alert('Error', 'No se pudo generar el PDF. Intenta nuevamente asegurándote que la pantalla de progreso sea visible.');
     }
-
-    const uri = await captureRef(chartRef.current, {
-      format: "jpg",
-      quality: 0.8,
-      result: "base64",
-    });
-
-    const imagenBase64 = `data:image/jpg;base64,${uri}`;
-    const hoyStr = new Date().toLocaleDateString();
-
-    // 2. HTML Simplificado (Sin scripts externos, carga la imagen directo)
-    const htmlContent = `
-      <html>
-        <body style="font-family: sans-serif; padding: 40px; color: #333;">
-          <div style="text-align: center;">
-            <h1 style="color: #003366; margin-bottom: 5px;">MONTALFIT</h1>
-            <p style="color: #28A745; font-weight: bold;">Reporte de Progreso Personal</p>
-          </div>
-
-          <div style="background: #f4f4f4; padding: 20px; border-radius: 15px; margin: 30px 0;">
-            <p><b>Usuario:</b> Aromas de los valles altos</p>
-            <p><b>Día del Reto:</b> ${diaDelReto}/90</p>
-            <p><b>Fecha de Reporte:</b> ${hoyStr}</p>
-            <p><b>Peso Actual:</b> ${historialPeso[historialPeso.length - 1]} kg</p>
-          </div>
-
-          <h3 style="color: #003366;">Evolución de Peso</h3>
-          <img src="${imagenBase64}" style="width: 100%; border-radius: 10px; border: 1px solid #ddd;" />
-
-          <div style="margin-top: 50px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px;">
-            Este reporte fue generado automáticamente por la App MontalFit.<br/>
-            &copy; 2026 MontalFit.
-          </div>
-        </body>
-      </html>
-    `;
-
-    const { uri: pdfUri } = await Print.printToFileAsync({ html: htmlContent });
-    await Sharing.shareAsync(pdfUri);
-
-  } catch (e) {
-    console.log(e);
-    Alert.alert("Error", "Asegúrate de que la gráfica sea visible en pantalla antes de exportar.");
-  }
-};
+  };
 
   const gestionarReto = async () => {
     if (!enReto) {
@@ -357,15 +383,13 @@ Alert.alert(
     </Text>
   </View>
 
-              {diaDelReto >= 30 ? (
-                <TouchableOpacity style={styles.btnDescargar} onPress={generarPDFMontalFit}>
-                  <Ionicons name="cloud-download-outline" size={18} color="#FFF" />
-                  <Text style={styles.btnDescargarTxt}>DESCARGAR REPORTE MENSUAL</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.btnBloqueado}>
-                  <Ionicons name="lock-closed" size={14} color="#666" />
-                  <Text style={styles.txtBloqueado}>Reporte disponible en el día 30</Text>
+              <TouchableOpacity style={styles.btnDescargar} onPress={generarPDFMontalFit}>
+                <Ionicons name="cloud-download-outline" size={18} color="#FFF" />
+                <Text style={styles.btnDescargarTxt}>{diaDelReto >= 90 ? 'DESCARGAR REPORTE COMPLETO' : diaDelReto >= 30 ? 'DESCARGAR REPORTE MENSUAL' : 'DESCARGAR REPORTE (PARCIAL)'}</Text>
+              </TouchableOpacity>
+              {diaDelReto < 30 && (
+                <View style={{ marginTop: 8, alignItems: 'center' }}>
+                  <Text style={{ color: '#FFD700', fontSize: 11 }}>Reporte parcial: contiene resumen y gráfica si está disponible</Text>
                 </View>
               )}
 
