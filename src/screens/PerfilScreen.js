@@ -174,6 +174,32 @@ const guardarCambios = async () => {
     );
   };
 
+  // Sólo para pruebas: forzar el inicio del reto 90 días atrás (visible en desarrollo)
+  const forzarReto90 = async () => {
+    try {
+      const hoy = new Date();
+      const inicio = new Date(hoy.getTime() - (90 - 1) * 24 * 60 * 60 * 1000); // hace 89 días -> día 90
+      await AsyncStorage.setItem('@inicio_reto_montalfit', inicio.toISOString());
+      Alert.alert('Forzado', 'El reto se ha fijado al día 90 para pruebas. Reinicia la pantalla de Progreso.');
+    } catch (e) {
+      Alert.alert('Error', 'No se pudo forzar el reto.');
+    }
+  };
+
+  const confirmarForzarReto90 = () => {
+    Alert.alert(
+      'Forzar Reto (solo dev)',
+      'Esto fijará la fecha de inicio del reto 90 días atrás para pruebas. ¿Confirmas?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Sí, forzar', style: 'destructive', onPress: () => {
+          console.log('[DEV] Forzando reto 90 días');
+          forzarReto90();
+        } }
+      ]
+    );
+  };
+
   if (!perfil) return (
     <View style={[styles.container, {justifyContent: 'center'}]}>
       <Text style={{color: '#FFF', textAlign: 'center'}}>Cargando perfil...</Text>
@@ -343,6 +369,13 @@ const guardarCambios = async () => {
         <TouchableOpacity style={[styles.btnReset, { marginTop: 12 }]} onPress={limpiarDiarios}>
           <Text style={[styles.btnResetTxt, { color: '#FFFFFF' }]}>LIMPIAR REGISTROS DIARIOS</Text>
         </TouchableOpacity>
+
+        {/* BOTÓN DE PRUEBA: FORZAR RETO 90 DÍAS (solo en desarrollo) */}
+        {__DEV__ && (
+          <TouchableOpacity style={[styles.btnReset, { marginTop: 12, backgroundColor: '#444' }]} onPress={confirmarForzarReto90}>
+            <Text style={[styles.btnResetTxt, { color: '#FFF' }]}>Forzar reto 90 (dev)</Text>
+          </TouchableOpacity>
+        )}
 
         {/* SECCIÓN DE ACLARACIONES LEGALES */}
 <TouchableOpacity 
