@@ -33,4 +33,34 @@ npx expo start
 - Evita dejar `USDA_API_KEY` hardcodeada en repositorios públicos.
 - `AsyncStorage.clear()` fue reemplazado por eliminación selectiva para evitar borrar datos no relacionados.
 
+---
+
+## Construcción y despliegue web (PWA)
+1. Genera la versión web:
+   ```bash
+   npm run build:web   # crea carpeta `dist/`
+   ```
+2. Prueba localmente con un servidor estático:
+   ```bash
+   npx serve dist
+   ```
+   Visita http://localhost:5000 y verifica que funciona offline y que aparece el banner "Instalar" en móviles.
+3. **Despliegue en Vercel** (recomendado):
+   - Sube el repo a GitHub/GitLab y conecta el proyecto en vercel.com.
+   - Build command: `npm run build:web`, output: `dist`.
+   - Añade variables de entorno (`USDA_API_KEY` etc.) en Settings → Environment Variables.
+   - Después de cada push la web se redeploya automáticamente.
+4. Verifica la aplicación en la URL proporcionada por Vercel. Prueba también con DevTools en modo offline para confirmar el service worker.
+
+## Código QR para promoción
+Una vez tu sitio esté en línea (por ejemplo https://montalfit.vercel.app) puedes generar un código QR usando cualquier generador. Ejemplo:
+
+```
+https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://montalfit.vercel.app
+```
+
+Este enlace descarga una imagen QR que redirige al dominio; úsalo en folletos, carteles o pantallas de gimnasios.
+
+---
+
 Si quieres que yo haga commits finales y corra `npx expo start` desde este entorno, indícamelo y lo ejecuto.
