@@ -141,6 +141,9 @@ const guardarCambios = async () => {
             try {
               // Eliminamos únicamente las claves relevantes para evitar borrar otros datos
               await AsyncStorage.multiRemove(['@perfil_usuario','@historial_peso','@inicio_reto_montalfit']);
+              // limpiar estado local para forzar regreso a registro
+              setPerfil(null);
+              setTempData({});
               Alert.alert("Datos borrados", "Se eliminaron los datos principales. Reinicia la app para empezar de cero.");
             } catch (e) {
               Alert.alert("Error", "No se pudieron borrar todos los datos.");
@@ -397,6 +400,22 @@ const guardarCambios = async () => {
 >
   <Ionicons name="information-circle-outline" size={20} color="#AAA" />
   <Text style={styles.btnInfoTxt}>Información Legal y Privacidad</Text>
+</TouchableOpacity>
+
+{/* BOTÓN TÉRMINOS Y CONDICIONES */}
+<TouchableOpacity
+  style={[styles.btnInfo, { marginTop: 10 }]}
+  onPress={() => Alert.alert(
+    "Términos y Condiciones",
+    "Al usar esta aplicación aceptas los términos y condiciones establecidos. \n\n" +
+    "1. Uso personal únicamente.\n" +
+    "2. No se ofrece garantía de exactitud de los datos.\n" +
+    "3. La información no sustituye asesoría profesional.\n",
+    [{ text: "Aceptar" }]
+  )}
+>
+  <Ionicons name="document-text-outline" size={20} color="#AAA" />
+  <Text style={styles.btnInfoTxt}>Términos y Condiciones</Text>
 </TouchableOpacity>
         
         <Text style={styles.brand}>MontalFit - v1.0 - Desarrollado por Victor Aliendo</Text>
