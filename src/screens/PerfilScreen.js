@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import DateInput from '../components/DateInput';
 import { Platform } from 'react-native'; // Útil para diferenciar Android/iOS
 
 export default function PerfilScreen() {
