@@ -30,6 +30,7 @@ export default function RegistroScreen({ onRegistroCompleto }) {
     objetivo: 'Mantener',
     actividad: 1.375 
   });
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -62,11 +63,18 @@ export default function RegistroScreen({ onRegistroCompleto }) {
   const calcularPlan = async () => {
   const { nombre, peso, altura, nacimiento, sexo, objetivo, actividad } = datos;
 
-  // 1. Validar campos vacíos
-  if (!nombre || !peso || !altura || !nacimiento) {
+  // 1. Validar campos vacíos y marcar errores
+  const newErrors = {};
+  if (!nombre) newErrors.nombre = 'Requerido';
+  if (!peso) newErrors.peso = 'Requerido';
+  if (!altura) newErrors.altura = 'Requerido';
+  if (!nacimiento) newErrors.nacimiento = 'Requerido';
+  if (Object.keys(newErrors).length > 0) {
+    setErrors(newErrors);
     Alert.alert("Campos incompletos", "Por favor, llena todos los datos.");
     return;
   }
+  setErrors({});
 
   // 2. Validaciones de Rangos Reales (Seguridad)
   const pesoNum = parseFloat(peso);
@@ -136,11 +144,13 @@ export default function RegistroScreen({ onRegistroCompleto }) {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>¿Cómo te llamas?</Text>
           <TextInput 
-            style={styles.input} 
+            style={[styles.input, errors.nombre && styles.inputError]} 
             placeholder="Escribe tu nombre" 
             placeholderTextColor="#666"
+            value={datos.nombre}
             onChangeText={(val) => setDatos({...datos, nombre: val})}
           />
+          {errors.nombre && <Text style={styles.errorText}>{errors.nombre}</Text>}
         </View>
 
         <Text style={styles.label}>Sexo</Text>
@@ -159,7 +169,7 @@ export default function RegistroScreen({ onRegistroCompleto }) {
         {/* CAMBIO: Selector de Fecha en lugar de TextInput */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Fecha de Nacimiento</Text>
-          <View style={styles.input}>
+          <View style={[styles.input, errors.nacimiento && styles.inputError]}>
             <DateInput
               value={datos.nacimiento}
               onPress={() => setShowDatePicker(true)}
@@ -172,6 +182,7 @@ export default function RegistroScreen({ onRegistroCompleto }) {
               }}
             />
           </View>
+          {errors.nacimiento && <Text style={styles.errorText}>{errors.nacimiento}</Text>}
         </View>
 
         {showDatePicker && (
@@ -187,11 +198,13 @@ export default function RegistroScreen({ onRegistroCompleto }) {
         <View style={styles.row}>
           <View style={{flex: 1, marginRight: 10}}>
             <Text style={styles.label}>Peso (kg)</Text>
-            <TextInput style={styles.input} keyboardType="numeric" placeholder="75" placeholderTextColor="#666" onChangeText={(val) => setDatos({...datos, peso: val})} />
+            <TextInput style={[styles.input, errors.peso && styles.inputError]} keyboardType="numeric" placeholder="75" placeholderTextColor="#666" value={datos.peso} onChangeText={(val) => setDatos({...datos, peso: val})} />
+            {errors.peso && <Text style={styles.errorText}>{errors.peso}</Text>}
           </View>
           <View style={{flex: 1}}>
             <Text style={styles.label}>Altura (cm)</Text>
-            <TextInput style={styles.input} keyboardType="numeric" placeholder="170" placeholderTextColor="#666" onChangeText={(val) => setDatos({...datos, altura: val})} />
+            <TextInput style={[styles.input, errors.altura && styles.inputError]} keyboardType="numeric" placeholder="170" placeholderTextColor="#666" value={datos.altura} onChangeText={(val) => setDatos({...datos, altura: val})} />
+            {errors.altura && <Text style={styles.errorText}>{errors.altura}</Text>}
           </View>
         </View>
 
@@ -251,4 +264,6 @@ const styles = StyleSheet.create({
   btnDesc: { color: '#AAA', textAlign: 'center', fontSize: 10, marginTop: 4 },
   btnPrincipal: { backgroundColor: '#28A745', padding: 20, borderRadius: 15, alignItems: 'center', marginTop: 15 },
   btnPrincipalText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
+  inputError: { borderColor: '#FF4444' },
+  errorText: { color: '#FF4444', fontSize: 12, marginTop: 2 },
 }); 
