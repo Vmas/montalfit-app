@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon-512.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -20,17 +20,23 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#003366"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.victormas.MontalFit"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "display": "standalone",
+      "output": "static",
+      "bundler": "metro"
     },
     "plugins": [
       "@react-native-community/datetimepicker"
-    ]
-    ,
+    ],
     "extra": {
-      "USDA_API_KEY": ""
+      "USDA_API_KEY": "",
+      "eas": {
+        "projectId": "fbac1134-2898-4daa-8405-02b2b36fa6fc"
+      }
     }
   }
 }

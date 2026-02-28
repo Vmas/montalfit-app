@@ -1002,10 +1002,10 @@
   {
     "id": "fs-101",
     "nombre": "Cremigurt Power (20g Proteína)",
-    "calorias": 58,
+    "calorias": 82.6,
     "p": 13.33,
-    "c": 1.2,
-    "g": 0,
+    "c": 6,
+    "g": 0.66,
     "subnombre": "Lácteos / Probióticos",
     "pesoUnidad": 150
   },
@@ -2182,5 +2182,22 @@
     "c": 3,
     "g": 1.5,
     "porcion": "30g"
+  },
+  {
+    "nombre": "Ensalada Rusa (100g)",
+    "calorias": 200,
+    "p": 3,
+    "c": 15,
+    "g": 15,
+    "porcion": "100g" 
+  },
+  {
+    "nombre":"Ensalada pico de gallo (100g)",
+    "calorias": 40,
+    "p": 1,
+    "c": 8,
+    "g": 0.2,
+    "porcion": "100g" 
   }
+  
 ]
