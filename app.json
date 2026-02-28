@@ -26,11 +26,11 @@
     "web": {
       "favicon": "./assets/icon-512.png",
       "display": "standalone",
-      "output": "static",
       "bundler": "metro"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-router"
     ],
     "extra": {
       "USDA_API_KEY": "",

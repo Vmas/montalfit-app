@@ -158,7 +158,7 @@ if (fechaInicioStr) {
             ${imagenBloque}
 
             <div style="margin-top: 30px;">
-              <h4 style="color:#003366;">Resumen Nutricional (hoy)</h4>
+              <h4 style="color:#003366;">Resumen Nutricional (${new Date().toLocaleDateString('es-ES')})</h4>
               <p>Kcal: ${Math.round(resumenComida.kcal)} / Meta: ${meta}</p>
               <p>Proteína: ${Math.round(resumenComida.p)} g</p>
               <p>Carbohidratos: ${Math.round(resumenComida.c)} g</p>
@@ -439,7 +439,7 @@ Alert.alert(
         </View>
 
         <View style={styles.inputCard}>
-          <Text style={styles.labelSec}>Estado Nutricional (Hoy)</Text>
+          <Text style={styles.labelSec}>{`Estado Nutricional (${new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })})`}</Text>
           <View style={styles.macroResumen}>
             <View style={styles.macroItem}><Text style={styles.macroVal}>{Math.round(resumenComida.kcal)}</Text><Text style={styles.macroLab}>kcal / {meta}</Text></View>
             <View style={styles.macroItem}><Text style={styles.macroVal}>{Math.round(resumenComida.p)}g</Text><Text style={styles.macroLab}>Prot</Text></View>

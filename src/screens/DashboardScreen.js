@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, 
-  StyleSheet, ActivityIndicator, Alert, ScrollView, Modal 
+  StyleSheet, ActivityIndicator, Alert, ScrollView, Modal,
+  Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,8 +12,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import alimentosLocales from '../data/alimentos.json';
 import Constants from 'expo-constants';
 
-// Leer API KEY desde app config (expo extra) para evitar dejarla hardcodeada
-const USDA_API_KEY = Constants.manifest?.extra?.USDA_API_KEY || null;
+// Leer API KEY desde variable de entorno en build (EXPO_USDA_API_KEY) o desde app config
+// Esto permite fijar la clave en Vercel sin guardarla en git.
+const USDA_API_KEY =
+  process.env.EXPO_USDA_API_KEY ||
+  Constants.manifest?.extra?.USDA_API_KEY ||
+  null;
 
 export default function DashboardScreen() {
   // --- ESTADOS ---
@@ -92,8 +97,9 @@ export default function DashboardScreen() {
   const sumarAgua = async (ml) => {
     const llave = getFechaKey(fechaConsulta);
     const nuevaCantidad = aguaConsumida + ml;
-    if (nuevaCantidad > 6000) {
-      Alert.alert("¡Atención!", "Estás registrando mucha agua. Mantén presionado para reiniciar si es un error.");
+    if (nuevaCantidad > 5000) {
+      // incluir icono de advertencia para enfatizar
+      Alert.alert("⚠️ ¡Atención!", "Estás registrando mucha agua. Mantén presionado para reiniciar si es un error.");
     }
     setAguaConsumida(nuevaCantidad);
     await AsyncStorage.setItem(`@agua_${llave}`, nuevaCantidad.toString());
@@ -265,6 +271,16 @@ export default function DashboardScreen() {
             <Ionicons name="leaf" size={16} color="#28A745" />
             <Text style={styles.brandTitle}>MONTALFIT</Text>
         </View>
+
+        {/* Nota para web: algunas interacciones requieren dispositivo móvil */}
+        {Platform.OS === 'web' && (
+          <View style={styles.webNote}>
+            <Text style={styles.webNoteText}>
+              ⚠️ Las funciones de largo pulsado y algunas APIs sólo están disponibles en móvil. 
+              Para probarlas instala la PWA o abre en Expo Go usando el QR.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.selectorFecha}>
           <TouchableOpacity onPress={() => cambiarDia(-1)} style={styles.flechaBtn}>
@@ -595,6 +611,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
     letterSpacing: 1,
   },
+  webNote: { backgroundColor: '#333', padding: 10, borderRadius: 8, marginVertical: 10 },
+  webNoteText: { color: '#FFD700', fontSize: 12, textAlign: 'center' },
   flechaBtn: {
     padding: 10,
     backgroundColor: 'rgba(40, 167, 69, 0.1)',
