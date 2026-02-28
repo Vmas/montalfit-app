@@ -274,33 +274,38 @@ const guardarCambios = async () => {
 
           {/* EDAD */}
           <View style={styles.infoRow}>
-  <Text style={styles.infoLabel}>Fecha de Nacimiento:</Text>
-  {editando ? (
-    <View>
-      <TouchableOpacity 
-        style={styles.btnFechaSelector} 
-        onPress={() => setShowDatePicker(true)}
-      >
-        <Text style={styles.btnFechaSelectorTxt}>
-          {tempData.fechaNacimiento || "Seleccionar Fecha"}
-        </Text>
-        <Ionicons name="calendar-outline" size={18} color="#28A745" />
-      </TouchableOpacity>
+          <Text style={styles.infoLabel}>Fecha de Nacimiento:</Text>
+          {editando ? (
+            <View>
+              <TouchableOpacity style={styles.btnFechaSelector} disabled>
+                {/* placeholder container so styles remain consistent */}
+                <Text style={styles.btnFechaSelectorTxt}>{tempData.fechaNacimiento || "Seleccionar Fecha"}</Text>
+                <Ionicons name="calendar-outline" size={18} color="#28A745" />
+              </TouchableOpacity>
 
-      {showDatePicker && (
-        <DateTimePicker
-          value={tempData.fechaNacimiento ? new Date(tempData.fechaNacimiento) : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={onChangeFecha}
-          maximumDate={new Date()} // No permite fechas futuras
-        />
-      )}
-    </View>
-  ) : (
-    <Text style={styles.infoText}>{perfil.nacimiento} ({perfil.edad} años)</Text>
-  )}
-</View>
+              {/* Cross-platform date input */}
+              <DateInput
+                value={tempData.fechaNacimiento || ''}
+                onPress={() => setShowDatePicker(true)}
+                onChange={(iso) => {
+                  if (iso) setTempData({ ...tempData, fechaNacimiento: iso });
+                }}
+              />
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={tempData.fechaNacimiento ? new Date(tempData.fechaNacimiento) : new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onChangeFecha}
+                  maximumDate={new Date()} // No permite fechas futuras
+                />
+              )}
+            </View>
+          ) : (
+            <Text style={styles.infoText}>{perfil.nacimiento} ({perfil.edad} años)</Text>
+          )}
+        </View>
 
           {/* OBJETIVO SELECTOR (Sincronizado con Registro) */}
 {editando && (

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker'; // <-- Importante tener instalada esta librería
+import DateInput from '../components/DateInput';
 
 export default function RegistroScreen({ onRegistroCompleto }) {
   const [cargando, setCargando] = useState(true);
@@ -158,9 +159,19 @@ export default function RegistroScreen({ onRegistroCompleto }) {
         {/* CAMBIO: Selector de Fecha en lugar de TextInput */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Fecha de Nacimiento</Text>
-          <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
-            <Text style={{color: '#FFF'}}>{datos.nacimiento}</Text>
-          </TouchableOpacity>
+          <View style={styles.input}>
+            <DateInput
+              value={datos.nacimiento}
+              onPress={() => setShowDatePicker(true)}
+              onChange={(iso) => {
+                // web will call onChange with ISO YYYY-MM-DD
+                if (iso) {
+                  setFechaSeleccionada(new Date(iso));
+                  setDatos({ ...datos, nacimiento: iso });
+                }
+              }}
+            />
+          </View>
         </View>
 
         {showDatePicker && (
