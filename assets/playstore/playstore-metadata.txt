@@ -1,0 +1,20 @@
+Title: MontalFit — Controla tu nutrición y progreso
+
+Short description:
+Registra comidas, peso y agua. Reportes y retos de 90 días.
+
+Full description:
+MontalFit te ayuda a llevar un control sencillo y efectivo de tu alimentación y progreso corporal. Registra tus comidas, calorías y macros, controla tu hidratación diaria, y participa en retos de 90 días. Exporta reportes en PDF y consulta tu historial de peso con gráficas.
+
+Features:
+- Registro rápido de alimentos (base local + USDA opcional)
+- Añadir alimentos manualmente
+- Conteo de macros y calorías restantes
+- Control de hidratación con aviso
+- Historial de peso y generación de reportes (PDF)
+- Reto de 90 días para constancia
+
+Keywords: nutrición, calorías, macros, salud, peso, fitness, progreso, hidratación
+
+Contact: vmas.system@gmail.com
+Privacy policy: https://yourdomain.example/privacy (actualiza antes de publicar)
