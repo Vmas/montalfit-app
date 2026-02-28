@@ -404,23 +404,24 @@ const guardarCambios = async () => {
 
         {/* SECCIÓN DE ACLARACIONES LEGALES */}
         {!editando && (
-<TouchableOpacity 
-  style={styles.btnInfo} 
-  onPress={() => Alert.alert(
-    "Aviso Importante y Privacidad",
-    "• No es una app médica: Destinada a apoyar el estilo de vida como referencia aproximada. Consulta siempre a un nutricionista.\n\n" +
-    "• Datos Locales: Tu información se guarda solo en este teléfono. Al cambiar de dispositivo o borrar la app, los datos se perderán.\n\n" +
-    "• Recomendación: Se sugiere ejercicio de fuerza para optimizar resultados.\n\n" +
-    "• Herramienta en crecimiento: Los datos pueden no ser exactos, úsalos como guía referencial.",
-    [{ text: "Entendido" }]
-  )}
->
-  <Ionicons name="information-circle-outline" size={20} color="#AAA" />
-  <Text style={styles.btnInfoTxt}>Información Legal y Privacidad</Text>
-</TouchableOpacity>
+          <TouchableOpacity
+            style={styles.btnInfo}
+            onPress={() => Alert.alert(
+              "Aviso Importante y Privacidad",
+              "• No es una app médica: Destinada a apoyar el estilo de vida como referencia aproximada. Consulta siempre a un nutricionista.\n\n" +
+              "• Datos Locales: Tu información se guarda solo en este teléfono. Al cambiar de dispositivo o borrar la app, los datos se perderán.\n\n" +
+              "• Recomendación: Se sugiere ejercicio de fuerza para optimizar resultados.\n\n" +
+              "• Herramienta en crecimiento: Los datos pueden no ser exactos, úsalos como guía referencial.",
+              [{ text: "Entendido" }]
+            )}
+          >
+            <Ionicons name="information-circle-outline" size={20} color="#AAA" />
+            <Text style={styles.btnInfoTxt}>Información Legal y Privacidad</Text>
+          </TouchableOpacity>
+        )}
 
-{/* BOTÓN TÉRMINOS Y CONDICIONES */}
-{/* (Términos y Condiciones eliminado: se mantiene solo Información Legal y Privacidad) */}
+        {/* BOTÓN TÉRMINOS Y CONDICIONES */}
+        {/* (Términos y Condiciones eliminado: se mantiene solo Información Legal y Privacidad) */}
         {!editando && (
           <>
             <Text style={styles.brand}>MontalFit - v1.0 - Desarrollado por Victor Aliendo</Text>
