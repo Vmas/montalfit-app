@@ -4,7 +4,7 @@
     "slug": "MontalFit",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon-512.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -24,7 +24,7 @@
       "package": "com.victormas.MontalFit"
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/icon-512.png",
       "display": "standalone",
       "output": "static",
       "bundler": "metro"
