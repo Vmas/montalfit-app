@@ -230,14 +230,14 @@ const guardarCambios = async () => {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         
-        {/* ENCABEZADO CON BOTÓN EDITAR */}
+        {/* ENCABEZADO CON BOTÓN EDITAR/GUARDAR */}
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.btnEditHeader} 
             onPress={() => editando ? guardarCambios() : setEditando(true)}
           >
             <Ionicons name={editando ? "checkmark-circle" : "pencil"} size={24} color="#28A745" />
-            <Text style={styles.btnEditTxt}>{editando ? "GUARDAR" : "EDITAR"}</Text>
+            <Text style={styles.btnEditTxt}>{editando ? "GUARDAR Y VOLVER" : "EDITAR"}</Text>
           </TouchableOpacity>
 
           <View style={styles.avatar}>
@@ -389,18 +389,21 @@ const guardarCambios = async () => {
         )}
 
         {/* BOTÓN PARA LIMPIAR DIARIOS */}
-        <TouchableOpacity style={[styles.btnReset, { marginTop: 12 }]} onPress={limpiarDiarios}>
-          <Text style={[styles.btnResetTxt, { color: '#FFFFFF' }]}>LIMPIAR REGISTROS DIARIOS</Text>
-        </TouchableOpacity>
+        {!editando && (
+          <TouchableOpacity style={[styles.btnReset, { marginTop: 12 }]} onPress={limpiarDiarios}>
+            <Text style={[styles.btnResetTxt, { color: '#FFFFFF' }]}>LIMPIAR REGISTROS DIARIOS</Text>
+          </TouchableOpacity>
+        )}
 
         {/* BOTÓN DE PRUEBA: FORZAR RETO 90 DÍAS (solo en desarrollo) */}
-        {__DEV__ && (
+        {!editando && __DEV__ && (
           <TouchableOpacity style={[styles.btnReset, { marginTop: 12, backgroundColor: '#444' }]} onPress={confirmarForzarReto90}>
             <Text style={[styles.btnResetTxt, { color: '#FFF' }]}>Forzar reto 90 (dev)</Text>
           </TouchableOpacity>
         )}
 
         {/* SECCIÓN DE ACLARACIONES LEGALES */}
+        {!editando && (
 <TouchableOpacity 
   style={styles.btnInfo} 
   onPress={() => Alert.alert(
@@ -418,10 +421,13 @@ const guardarCambios = async () => {
 
 {/* BOTÓN TÉRMINOS Y CONDICIONES */}
 {/* (Términos y Condiciones eliminado: se mantiene solo Información Legal y Privacidad) */}
-        
-        <Text style={styles.brand}>MontalFit - v1.0 - Desarrollado por Victor Aliendo</Text>
-        <Text style={styles.brand}> vmas.system@gmail.com</Text>
-        <View style={{height: 40}} />
+        {!editando && (
+          <>
+            <Text style={styles.brand}>MontalFit - v1.0 - Desarrollado por Victor Aliendo</Text>
+            <Text style={styles.brand}> vmas.system@gmail.com</Text>
+            <View style={{height: 40}} />
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
