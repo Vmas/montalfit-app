@@ -141,9 +141,16 @@ const guardarCambios = async () => {
             try {
               // Eliminamos únicamente las claves relevantes para evitar borrar otros datos
               await AsyncStorage.multiRemove(['@perfil_usuario','@historial_peso','@inicio_reto_montalfit']);
-              // limpiar estado local para forzar regreso a registro
+              // limpiar estado local
               setPerfil(null);
               setTempData({});
+              // En web recargamos para iniciar el flujo desde cero
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                // small delay to allow AsyncStorage writes to complete
+                setTimeout(() => window.location.reload(), 300);
+                return;
+              }
+              // En móvil mostramos mensaje indicando reinicio necesario
               Alert.alert("Datos borrados", "Se eliminaron los datos principales. Reinicia la app para empezar de cero.");
             } catch (e) {
               Alert.alert("Error", "No se pudieron borrar todos los datos.");
