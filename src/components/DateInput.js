@@ -8,7 +8,7 @@ export default function DateInput({ value, onPress, onChange, style }) {
         type="date"
         value={value}
         onChange={(e) => onChange && onChange(e.target.value)}
-        style={{ padding: 10, fontSize: 16, borderRadius: 6, border: '1px solid #ccc', background: 'transparent', color: '#000', ...style }}
+        style={{ padding: 10, fontSize: 16, borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'transparent', color: '#FFF', ...style }}
       />
     );
   }
