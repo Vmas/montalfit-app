@@ -403,20 +403,7 @@ const guardarCambios = async () => {
 </TouchableOpacity>
 
 {/* BOTÓN TÉRMINOS Y CONDICIONES */}
-<TouchableOpacity
-  style={[styles.btnInfo, { marginTop: 10 }]}
-  onPress={() => Alert.alert(
-    "Términos y Condiciones",
-    "Al usar esta aplicación aceptas los términos y condiciones establecidos. \n\n" +
-    "1. Uso personal únicamente.\n" +
-    "2. No se ofrece garantía de exactitud de los datos.\n" +
-    "3. La información no sustituye asesoría profesional.\n",
-    [{ text: "Aceptar" }]
-  )}
->
-  <Ionicons name="document-text-outline" size={20} color="#AAA" />
-  <Text style={styles.btnInfoTxt}>Términos y Condiciones</Text>
-</TouchableOpacity>
+{/* (Términos y Condiciones eliminado: se mantiene solo Información Legal y Privacidad) */}
         
         <Text style={styles.brand}>MontalFit - v1.0 - Desarrollado por Victor Aliendo</Text>
         <Text style={styles.brand}> vmas.system@gmail.com</Text>
