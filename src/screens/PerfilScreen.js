@@ -8,7 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import DateInput from '../components/DateInput';
 import { Platform } from 'react-native'; // Útil para diferenciar Android/iOS
 
-export default function PerfilScreen() {
+export default function PerfilScreen({ onLogout }) {
   const [perfil, setPerfil] = useState(null);
   const [editando, setEditando] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -144,13 +144,19 @@ const guardarCambios = async () => {
               // limpiar estado local
               setPerfil(null);
               setTempData({});
-              // En web recargamos para iniciar el flujo desde cero
+
+              // avisamos al componente padre para que actualice el estado "logueado"
+              if (onLogout) {
+                onLogout();
+              }
+
+              // En web podemos forzar una recarga para asegurar que no queden caches de PWA
               if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                // small delay to allow AsyncStorage writes to complete
                 setTimeout(() => window.location.reload(), 300);
                 return;
               }
-              // En móvil mostramos mensaje indicando reinicio necesario
+
+              // En móvil simplemente mostramos mensaje y dejamos que App reevalúe la condición
               Alert.alert("Datos borrados", "Se eliminaron los datos principales. Reinicia la app para empezar de cero.");
             } catch (e) {
               Alert.alert("Error", "No se pudieron borrar todos los datos.");
@@ -174,8 +180,9 @@ const guardarCambios = async () => {
                 Alert.alert('No hay diarios', 'No se encontraron registros diarios en el storage.');
                 return;
               }
-              await AsyncStorage.multiRemove(diarios);
-              Alert.alert('Listo', 'Se eliminaron los registros diarios.');
+              // además limpiamos el historial de peso para que la gráfica de progreso quede vacía
+              await AsyncStorage.multiRemove([...diarios, '@historial_peso']);
+              Alert.alert('Listo', 'Se eliminaron los registros diarios y el historial de peso.');
             } catch (e) {
               console.log('Error limpiando diarios', e);
               Alert.alert('Error', 'No se pudieron eliminar todos los diarios.');

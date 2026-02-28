@@ -131,7 +131,10 @@ export default function App() {
           >
             <Tab.Screen name="Hoy" component={DashboardScreen} />
             <Tab.Screen name="Progreso" component={ProgresoScreen} />
-            <Tab.Screen name="Perfil" component={PerfilScreen} />
+            {/* pasamos una función para volver a evaluar "logueado" */}
+            <Tab.Screen name="Perfil">
+              {props => <PerfilScreen {...props} onLogout={() => setLogueado(false)} />}
+            </Tab.Screen>
           </Tab.Navigator>
         ) : (
           <RegistroScreen onRegistroCompleto={() => {
