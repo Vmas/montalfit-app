@@ -2265,14 +2265,7 @@
     "g": 18,
     "porcion": "100g" 
   },
-    {
-      "nombre":"arepa con carne de res",
-      "calorias": 480,
-      "p": 20,
-      "c": 30,
-      "g": 25,
-      "porcion": "100g" 
-    },
+    
     {
       "nombre":"arepa con carne de cerdo",
       "calorias": 500,
