@@ -589,6 +589,7 @@
     "subnombre": "Platos Completos",
     "pesoUnidad": 100
   },
+  
   {
     "id": "fs-60",
     "nombre": "Cachapa con Queso de Mano",
@@ -2198,6 +2199,166 @@
     "c": 8,
     "g": 0.2,
     "porcion": "100g" 
-  }
+  },
+  {
+    "nombre":"Arepa",
+    "calorias": 366,
+    "p": 7,
+    "c": 77,
+    "g": 2,
+    "porcion": "100g"
+  },
+  {
+    "nombre":"arepa con carne mechada",
+    "calorias": 450,
+    "p": 12,
+    "c": 35,
+    "g": 15,
+    "porcion": "100g" 
+  },
+  {
+    "nombre":"arepa con atún",
+    "calorias": 380,
+    "p": 20,
+    "c": 30,
+    "g": 10,
+    "porcion": "100g"
+  },
+  {
+    "nombre":"arepa con huevo",
+    "calorias": 410,
+    "p": 15,
+    "c": 40,
+    "g": 12,
+    "porcion": "100g"
+  },
+  {
+    "nombre":"arepa con jamón",
+    "calorias": 390,
+    "p": 18,
+    "c": 25,
+    "g": 14,
+    "porcion": "100g" 
+  },
+  {
+    "nombre":"arepa con queso y jamón",
+    "calorias": 430,
+    "p": 20,
+    "c": 30,
+    "g": 18,
+    "porcion": "100g" 
+  },
+  {
+    "nombre":"arepa con atún y huevo",
+    "calorias": 450,
+    "p": 25,
+    "c": 35,
+    "g": 15,
+    "porcion": "100g" 
+  },
+  {
+    "nombre":"arepa con atún y queso",
+    "calorias": 420,
+    "p": 22,
+    "c": 30,
+    "g": 12,
+    "porcion": "100g" 
+  },
+  {
+    "nombre":"arepa con carne molida",
+    "calorias": 470,
+    "p": 12,
+    "c": 35,
+    "g": 18,
+    "porcion": "100g"
+  },
+  {
+    "nombre":"arepa con queso",
+    "calorias": 400,
+    "p": 10,
+    "c": 40,
+    "g": 20,
+    "porcion": "100g" 
+  },
+  {
+    "nombre":"arepa con pollo",
+    "calorias": 420,
+    "p": 15,
+    "c": 35,
+    "g": 18,
+    "porcion": "100g" 
+  },
+    {
+      "nombre":"arepa con carne de res",
+      "calorias": 480,
+      "p": 20,
+      "c": 30,
+      "g": 25,
+      "porcion": "100g" 
+    },
+    {
+      "nombre":"arepa con carne de cerdo",
+      "calorias": 500,
+      "p": 18,
+      "c": 40,
+      "g": 22,
+      "porcion": "100g" 
+    },
+      {
+        "nombre":"arepa con carne de cerdo y queso",
+        "calorias": 550,
+        "p": 25,
+        "c": 35,
+        "g": 30,
+        "porcion": "100g" 
+      },
+      {
+        "nombre":"arepa con carne de res y queso",
+        "calorias": 530,
+        "p": 22,
+        "c": 30,
+        "g": 28,
+        "porcion": "100g" 
+      },
+      {
+        "nombre":"arepa con pollo y queso",
+        "calorias": 480,
+        "p": 18,
+        "c": 40,
+        "g": 20,
+        "porcion": "100g" 
+      },
+      {
+        "nombre":"arepa con carne mechada y queso",
+        "calorias": 600,
+        "p": 30,
+        "c": 25,
+        "g": 35,
+        "porcion": "100g" 
+      },
+      {
+        "nombre":"arepa con carne mechada, pollo y queso",
+        "calorias": 650,
+        "p": 35,
+        "c": 20,
+        "g": 40,
+        "porcion": "100g" 
+      },
+      {
+        "nombre":"arepa con carne de res, pollo y queso",
+        "calorias": 700,
+        "p": 40,
+        "c": 15,
+        "g": 45,
+        "porcion": "100g" 
+      },
+      {
+        "nombre":"arepa con carne de cerdo, pollo y queso",
+        "calorias": 750,
+        "p": 38,
+        "c": 10,
+        "g": 42,
+        "porcion": "100g" 
+      }
   
 ]
